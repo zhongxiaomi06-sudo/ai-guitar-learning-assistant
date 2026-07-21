@@ -682,8 +682,7 @@ async function prepareDemo() {
     try {
       const activation = activateRemoteCourse(backendDemo);
       navigate(backendDemo.status === 'ready' ? 'overview' : 'analysis');
-      await activation;
-      showToast('已载入后端课程与可用谱面。');
+      if (await activation) showToast('已载入后端课程与可用谱面。');
       return;
     } catch {
       showToast('后端示例暂时不可用，已切换为内置课程。', 'error');
@@ -981,14 +980,15 @@ async function stopMicrophone(updateUI = true, invalidateRequest = true) {
 }
 
 function skipMicrophone() {
+  const pendingView = state.pendingView;
+  state.pendingView = null;
   void stopMicrophone(false);
   state.micResolved = true;
   state.micAllowed = false;
   updateMicrophoneUI();
   closeLayer($('[data-mic-modal]'));
   showToast('已进入仅观看模式，可随时在顶部开启麦克风。');
-  if (state.pendingView) navigate(state.pendingView);
-  state.pendingView = null;
+  if (pendingView) navigate(pendingView);
 }
 
 function updateMicrophoneUI() {
