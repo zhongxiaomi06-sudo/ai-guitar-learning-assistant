@@ -8,6 +8,21 @@ import { formatTime } from './shared/utils/index.js';
 
 const DEMO_COURSE_ID = '';
 
+function escapeHTML(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character]);
+}
+
+function courseUrl(id) {
+  const params = new URLSearchParams({ course: String(id) });
+  return `/index.html?${params}`;
+}
+
 /**
  * 生成课程封面缩略图（颜色渐变）
  * @returns {string}
@@ -42,45 +57,54 @@ async function renderCourses() {
 
     if (courses.length === 0) {
       grid.innerHTML = '';
-      emptyState.style.display = 'flex';
+      if (emptyState) emptyState.style.display = 'flex';
       return;
     }
 
-    emptyState.style.display = 'none';
+    if (emptyState) emptyState.style.display = 'none';
 
-    grid.innerHTML = courses.map((course) => `
-      <article class="course-card" data-id="${course.id}">
+    grid.innerHTML = courses.map((course) => {
+      const title = escapeHTML(course.title || '未命名课程');
+      const id = escapeHTML(course.id);
+      const duration = Number(course.duration) > 0 ? formatTime(Number(course.duration)) : '';
+      const bpm = Number(course.bpm) > 0 ? `${Math.round(Number(course.bpm))} BPM` : 'BPM 未检测';
+      const progress = Math.max(0, Math.min(100, Number(course.progress) || 0));
+      const isReady = course.status === 'ready' || course.status === 'completed';
+      const isCompleted = course.status === 'completed';
+      return `
+      <article class="course-card" data-id="${id}">
         <div class="course-thumb" style="background: ${generateThumbColor()}">
           <div class="play-icon">▶</div>
-          ${course.duration ? `<span class="course-duration">${formatTime(course.duration)}</span>` : ''}
+          ${duration ? `<span class="course-duration">${duration}</span>` : ''}
         </div>
         <div class="course-body">
-          <h3 class="course-title" title="${course.title}">${course.title}</h3>
+          <h3 class="course-title" title="${title}">${title}</h3>
           <div class="course-meta">
-            <span>${course.bpm ? course.bpm + ' BPM' : 'BPM 未检测'}</span>
+            <span>${bpm}</span>
             <span>·</span>
-            <span>${course.status === 'ready' ? '可练习' : '处理中'}</span>
+            <span>${isReady ? '可练习' : '处理中'}</span>
           </div>
           <div class="course-progress">
             <div class="progress-label">
               <span>掌握进度</span>
-              <span>${course.progress}%</span>
+              <span>${progress}%</span>
             </div>
             <div class="progress-bar">
-              <div class="progress-fill" style="width: ${course.progress}%"></div>
+              <div class="progress-fill" style="width: ${progress}%"></div>
             </div>
           </div>
-          <span class="course-status ${course.status === 'completed' ? 'completed' : 'ready'}">
-            ${course.status === 'completed' ? '已完成' : '可练习'}
+          <span class="course-status ${isCompleted ? 'completed' : 'ready'}">
+            ${isCompleted ? '已完成' : (isReady ? '可练习' : '处理中')}
           </span>
         </div>
       </article>
-    `).join('');
+    `;
+    }).join('');
 
     grid.querySelectorAll('.course-card').forEach((card) => {
       card.addEventListener('click', () => {
         const id = card.dataset.id;
-        window.location.href = `/index.html?course=${id}`;
+        window.location.href = courseUrl(id);
       });
     });
   } catch (err) {
@@ -157,7 +181,7 @@ async function handleFileUpload(file) {
   try {
     const title = file.name.replace(/\.[^/.]+$/, '');
     const course = await api.upload(file, title);
-    window.location.href = `/index.html?course=${course.id}`;
+    window.location.href = courseUrl(course.id);
   } catch (err) {
     console.error('[Home] upload failed', err);
     alert('上传失败：' + err.message);
@@ -171,7 +195,7 @@ async function handleFileUpload(file) {
 async function handleUrlUpload(url) {
   try {
     const course = await api.fromUrl(url, `链接课程 ${new Date().toLocaleTimeString()}`);
-    window.location.href = `/index.html?course=${course.id}`;
+    window.location.href = courseUrl(course.id);
   } catch (err) {
     console.error('[Home] URL upload failed', err);
     alert('URL 提交失败：' + err.message);
@@ -186,13 +210,13 @@ function initDemoCourses() {
   demoCards.forEach((card) => {
     card.addEventListener('click', async () => {
       if (DEMO_COURSE_ID) {
-        window.location.href = `/index.html?course=${DEMO_COURSE_ID}`;
+        window.location.href = courseUrl(DEMO_COURSE_ID);
         return;
       }
       try {
         const courses = await api.list();
         if (courses.length > 0) {
-          window.location.href = `/index.html?course=${courses[0].id}`;
+          window.location.href = courseUrl(courses[0].id);
         } else {
           alert('暂无演示课程，请先上传视频');
         }

@@ -28,6 +28,7 @@ export class GuitarApp {
     this.loopCtrl = null;
     this.scoreModel = null;
     this.matchingEngine = null;
+    this.lastMatchedNoteId = null;
     this.rafId = null;
 
     this.panels = {};
@@ -148,6 +149,7 @@ export class GuitarApp {
     this.panels.video.seek(0);
     this.scoring.reset();
     this.session?.reset();
+    this.lastMatchedNoteId = null;
     this.panels.suggestions.updateStats(this.scoring);
   }
 
@@ -178,19 +180,27 @@ export class GuitarApp {
 
     const videoTime = this.panels.video.player.getCurrentTime();
     const detection = this.detector.getDetection();
-    const playedNote = {
-      pitch: detection.pitch.frequency,
-      velocity: detection.rms,
-      onsetTime: detection.time,
-      duration: 0,
-    };
-
-    const result = this.matchingEngine.match(videoTime, playedNote);
-    this.scoring.add(result);
-    this.session?.handleResult(result);
-
-    this.panels.suggestions.showFeedback(result);
-    this.panels.suggestions.updateStats(this.scoring);
+    const currentTarget = this.scoreModel.getNoteAtTime(videoTime);
+    const targetIdentity = currentTarget?.id
+      || (currentTarget ? `${currentTarget.startTime}:${currentTarget.endTime}` : null);
+    if (!currentTarget) this.lastMatchedNoteId = null;
+    if (currentTarget && detection.onset && detection.pitch.confidence >= 0.65 && targetIdentity !== this.lastMatchedNoteId) {
+      const playedNote = {
+        pitch: detection.pitch.frequency,
+        rms: detection.rms,
+        velocity: detection.rms,
+        // AudioContext 与视频有不同的时间原点；实时判定统一映射到视频时间轴。
+        onsetTime: videoTime,
+        duration: 0,
+      };
+      const result = this.matchingEngine.match(videoTime, playedNote);
+      this.lastMatchedNoteId = targetIdentity;
+      this.scoring.add(result);
+      this.session?.handleResult(result);
+      this.panels.suggestions.showFeedback(result);
+      this.panels.suggestions.updateStats(this.scoring);
+      this.panels.matching.updateResult(result);
+    }
 
     const nextNote = this.scoreModel.getNoteAtTime(videoTime + 0.5);
     this.panels.suggestions.showNextHint(nextNote);
@@ -204,8 +214,6 @@ export class GuitarApp {
       const targetFreq = targetNote ? 440 : 0; // TODO: 计算目标频率
       this.panels.matching.renderKTV(targetFreq, detection.pitch.frequency);
     }
-    this.panels.matching.updateResult(result);
-
     // 自适应调速
     if (this.settings.autoSlowDown && this.session) {
       this.panels.video.setSpeed(this.session.speed);

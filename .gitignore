@@ -1,8 +1,10 @@
 # Dependencies
 node_modules/
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
+
+# Local environment overrides
+/.env
+/.env.*
+!/.env.example
 
 # Build output
 dist/

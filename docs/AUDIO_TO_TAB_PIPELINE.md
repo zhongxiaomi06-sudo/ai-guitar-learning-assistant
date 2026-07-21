@@ -4,9 +4,9 @@
 
 | 步骤 | 工具 | 环境 |
 |------|------|------|
-| 音频提取 | FFmpeg | Python 3.12 |
-| 音频→MIDI note events | Basic Pitch (Spotify, ONNX 推理) | Python 3.12 |
-| 弦品求解 | 自研动态规划 (DP) | Python 3.12 |
+| 音频提取 | FFmpeg | Python 3.11 |
+| 音频→MIDI note events | Basic Pitch (Spotify，当前使用包默认模型) | Python 3.11 |
+| 弦品求解 | 自研动态规划 (DP) | Python 3.11 |
 | 谱面数据格式 | Canonical Score JSON | 跨端通用 |
 | 谱面渲染 | 前端自研 rhythm game / 六线谱 | 浏览器 |
 
@@ -27,8 +27,8 @@
 
 ### 2. Basic Pitch 转录
 
-- `basic-pitch` 0.4.0 使用 ONNX Runtime，无需 TensorFlow
-- 可调参数：`onset_threshold` / `frame_threshold` / `minimum_note_length`
+- `basic-pitch` 0.4.0 当前通过包默认模型推理；Linux 安装可能包含 TensorFlow，不能宣称仅依赖 ONNX
+- 可调参数：`onset_threshold` / `frame_threshold` / `minimum_note_length`（毫秒）
 - 输出 note events：`(start, end, pitch, confidence)`
 - 过滤非吉他音区（默认 MIDI 40–76）
 - 合并同音高碎音符、删除过短噪声（< 80 ms）
@@ -63,7 +63,7 @@ python scripts/run_pipeline.py storage/videos/bcf4b374c965.mp4 `
 ## 当前状态
 
 - [x] FFmpeg 音频提取
-- [x] Basic Pitch ONNX 转录
+- [x] Basic Pitch 转录（默认模型）
 - [x] 吉他音区过滤与碎音合并
 - [x] DP 弦品求解
 - [x] Canonical Score JSON 生成

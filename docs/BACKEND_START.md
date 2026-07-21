@@ -6,13 +6,13 @@
 
 ## 当前项目状态
 
-- 前端已可跑：`home.html`（上传/URL/演示课程） + `index.html`（执行页，含音游模式）。
-- 后端 FastAPI 已启动：提供课程 CRUD、视频上传、谱面 JSON、视频流服务。
-- 前端已从 `localStorage` 切换到后端 API（`src/shared/utils/api.js`）。
-- 已下载 Bilibili 演示视频并裁剪为 60 秒，已生成 `demo_score.json` 并上传到后端本地存储。
-- 实时音高检测已接入 Web Audio API（前端 YIN 简化实现，见 `src/core/audio/analyzer.js`）。
+- 默认前端是 `index.html` → `src/product-app.js` 的艺术化单页；`home.html` 只做兼容重定向。
+- 后端 FastAPI 代码已提供课程 CRUD、视频上传、谱面 JSON 和视频读取服务，但开发时仍需单独启动。
+- `src/shared/utils/api.js` 已提供 API 客户端，默认单页对真实课程和媒体的接入仍在完善；界面偏好仍会使用 `localStorage`。
+- 仓库不包含可直接使用的演示视频或 `demo_score.json`，不能把某个开发者本地存储中的数据视为开箱即用资产。
+- Web Audio / YIN 已具备基础实现（见 `src/core/audio/analyzer.js`），但尚未完成目标谱面驱动的实时评分验证。
 - URL 抓取当前仅记录链接，不自动下载（受法律和反爬限制）。
-- **当前最大 Gap**：后端谱面数据已可获取，但音游模式仍使用随机音符，尚未被真实谱面驱动；`app.js` 与 `ui-demo.js` 两套前端系统尚未整合。
+- **当前最大 Gap**：后端数据、艺术化产品入口和麦克风检测尚未形成同一条经过验证的端到端跟练链路；仓库也保留了多套过渡期前端实现。
 
 ## 后端职责边界（MVP 阶段）
 
@@ -63,11 +63,13 @@ guitar/
 | 容器 | Docker Compose | 一键拉起本地环境。 |
 | 部署 | 待定 | 先用本地 Docker，云服务器后续再定。 |
 
-## 第一阶段：最小可行后端（已完成）
+## 第一阶段：最小可行后端（代码已完成）
 
-目标：让前端能调用 API，获取一个真实 DEMO 课程和谱面。
+目标：让前端能调用 API，并在准备好授权素材后接入一个真实 DEMO 课程和谱面。
 
-**状态**：已完成。目录结构与文件如下：
+**状态**：API、模型、数据库和存储层代码已提交；运行可用性取决于本地环境变量、依赖与存储配置。目录结构如下：
+
+```text
 backend/app/
 ├── __init__.py
 ├── main.py
@@ -131,17 +133,17 @@ class Course(Base):
 - AI 自动扒谱（先用预精修 `score.json`）。
 - Celery（先用同步处理，小文件不影响）。
 
-## 第二阶段：接入真实 DEMO 数据（已完成）
+## 第二阶段：接入可复现的 DEMO 数据（部分完成）
 
 目标：用一段真实吉他教学视频 + 人工精修谱面，跑通前端执行页。
 
-1. ✅ 已下载 Bilibili 吉他教学视频《拥抱》并裁剪为 60 秒。
-2. ✅ 已手工编写 `demo_score.json`，符合 `src/shared/types/index.js` 的 `Project` 结构。
-3. ✅ 已把视频和谱面上传到后端本地存储。
-4. ✅ 已修改 `home.js`：上传时调用后端 `POST /api/v1/courses/upload`。
-5. ✅ 已修改 `main.js`：从后端 `GET /api/v1/courses/{id}/score` 加载谱面（目前仅 console.log，尚未驱动 UI）。
+1. ✅ 后端支持上传视频与谱面，并可通过 API 读取。
+2. ✅ `src/home.js` 和 `src/main.js` 包含课程上传/读取的过渡实现。
+3. ⏳ 默认艺术化入口正在接入课程、视频和谱面状态。
+4. ⏳ 需要准备具有明确授权、可重复获取的演示视频与谱面资产。
+5. ⏳ 谱面尚未驱动默认跟练界面的时间轴和评分。
 
-**注意**：演示视频和 `demo_score.json` 保存在本地 `backend/storage/`（已被 `.gitignore` 排除），Git 仓库中不包含这些媒体文件。新环境需重新生成或下载。
+**注意**：`backend/storage/` 被 `.gitignore` 排除。开发者本地曾使用过的媒体文件不会随 clone 获得，也不应在没有授权说明时要求其他人从第三方平台重新下载。
 
 ## 第三阶段：异步解析流水线（3–5 天）
 
@@ -183,7 +185,8 @@ class Course(Base):
 
 ```bash
 cd backend
-.venv\Scripts\activate
+source .venv/bin/activate      # macOS / Linux
+# .venv\Scripts\Activate.ps1  # Windows PowerShell
 uvicorn app.main:app --reload
 ```
 
@@ -195,13 +198,15 @@ npm run dev
 
 访问：
 
-- 主页：`http://localhost:3000/home.html`
-- 执行页：`http://localhost:3000/index.html?course=<course_id>`
+- 默认产品页：`http://localhost:3000/index.html#/home`
+- 兼容入口：`http://localhost:3000/home.html`（会重定向到默认产品页）
 - API 文档：`http://localhost:8000/docs`
+
+过渡模块中的 `?course=<course_id>` 读取逻辑尚未成为默认 HTML 入口的稳定契约；在文档确认前不要依赖该 URL 作为生产路由。
 
 ## 与现有文档关系
 
 - `PROJECT.md`：产品需求总纲，后端边界要服从其中 MVP 范围。
-- `TECHNICAL_RESEARCH.md`：完整技术栈调研，第三阶段开始大量参考。
+- `../TECHNICAL_RESEARCH.md`：完整技术栈调研，第三阶段开始大量参考。
 - `AUDIO_TO_TAB_PIPELINE.md`：第三阶段具体实现步骤。
-- `PROGRESS.md`：本文件应作为后端进度跟踪入口。
+- `PROGRESS.md`：项目进度跟踪入口。

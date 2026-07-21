@@ -36,29 +36,31 @@ export class MatchingEngine {
       return this.createResult(videoTime, null, playedNote, 'extra', '此段无目标音符');
     }
 
-    if (!playedNote || playedNote.rms < 0.01) {
+    const energy = Number(playedNote?.rms ?? playedNote?.velocity ?? 0);
+    if (!playedNote || energy < 0.01 || !Number.isFinite(playedNote.pitch) || playedNote.pitch <= 0) {
       return this.createResult(videoTime, targetNote, null, 'miss', '未检测到声音');
     }
 
-    const timingDeviation = playedNote.onsetTime - targetNote.startTime;
+    // 判定阈值以毫秒定义；调用方必须把 onsetTime 映射到视频时间轴。
+    const timingDeviation = (playedNote.onsetTime - targetNote.startTime) * 1000;
     const pitchDeviation = this.computePitchDeviation(playedNote, targetNote);
 
     if (Math.abs(timingDeviation) > THRESHOLD_GOOD_TIME && Math.abs(pitchDeviation) > THRESHOLD_GOOD_PITCH) {
-      return this.createResult(videoTime, targetNote, playedNote, 'wrong-pitch', '音高和节奏均不匹配');
+      return this.createResult(videoTime, targetNote, playedNote, 'wrong-pitch', '音高和节奏均不匹配', 'miss', pitchDeviation, timingDeviation);
     }
 
     if (Math.abs(pitchDeviation) > THRESHOLD_GOOD_PITCH) {
-      return this.createResult(videoTime, targetNote, playedNote, 'wrong-pitch', '音高偏差较大');
+      return this.createResult(videoTime, targetNote, playedNote, 'wrong-pitch', '音高偏差较大', 'miss', pitchDeviation, timingDeviation);
     }
 
     if (Math.abs(timingDeviation) > THRESHOLD_GOOD_TIME) {
-      return this.createResult(videoTime, targetNote, playedNote, 'miss', '节奏偏差较大');
+      return this.createResult(videoTime, targetNote, playedNote, 'miss', '节奏偏差较大', 'miss', pitchDeviation, timingDeviation);
     }
 
     const score = Math.abs(pitchDeviation) <= THRESHOLD_PERFECT_PITCH &&
       Math.abs(timingDeviation) <= THRESHOLD_PERFECT_TIME ? 'perfect' : 'good';
 
-    return this.createResult(videoTime, targetNote, playedNote, 'correct', score === 'perfect' ? '完美！' : '不错', score);
+    return this.createResult(videoTime, targetNote, playedNote, 'correct', score === 'perfect' ? '完美！' : '不错', score, pitchDeviation, timingDeviation);
   }
 
   /**
@@ -87,7 +89,7 @@ export class MatchingEngine {
    */
   noteToMidi(note) {
     // 标准调音 E2=40, A2=45, D3=50, G3=55, B3=59, E4=64
-    const baseMidi = [40, 45, 50, 55, 59, 64];
+    const baseMidi = [64, 59, 55, 50, 45, 40];
     return baseMidi[note.string - 1] + note.fret;
   }
 
@@ -99,16 +101,27 @@ export class MatchingEngine {
    * @param {string} type
    * @param {string} suggestion
    * @param {string} score
+   * @param {number} pitchDeviation
+   * @param {number} timingDeviation
    * @returns {import('../../shared/types/index.js').MatchResult}
    */
-  createResult(currentTime, targetNote, playedNote, type, suggestion, score = 'miss') {
+  createResult(
+    currentTime,
+    targetNote,
+    playedNote,
+    type,
+    suggestion,
+    score = 'miss',
+    pitchDeviation = 0,
+    timingDeviation = 0,
+  ) {
     return {
       currentTime,
       targetNote,
       playedNote,
       score,
-      pitchDeviation: 0,
-      timingDeviation: 0,
+      pitchDeviation,
+      timingDeviation,
       type,
       suggestion,
     };

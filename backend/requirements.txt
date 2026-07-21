@@ -20,8 +20,11 @@ python-dotenv>=1.0.0
 # Storage (optional, can be enabled via env)
 minio>=7.2.7
 
-# Audio → Tab pipeline (Python 3.11+ needs ONNX runtime instead of TensorFlow)
+# Audio → Tab pipeline. basic-pitch 0.4 supports Python through 3.11;
+# its default inference loader may install/use TensorFlow on Linux.
 basic-pitch==0.4.0
+# Kept for an explicit ONNX model path; the current wrapper uses Basic Pitch's
+# packaged default model and does not claim a TensorFlow-free installation.
 onnxruntime>=1.16.0
 librosa>=0.10.0
 pretty_midi>=0.2.9
@@ -30,6 +33,3 @@ soundfile>=0.12.0
 resampy>=0.4.2
 numpy>=1.26.0
 scipy>=1.10.0
-
-# Note: basic-pitch 0.4.0 declares tensorflow as a requirement for python>=3.11,
-# but the ONNX model path works with onnxruntime only, avoiding the heavy TF install.

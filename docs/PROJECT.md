@@ -1142,7 +1142,7 @@ PassCriteria {
 
 1. **前端技术栈**：保留 Vite + 原生 JavaScript，未来可视情况升级到 React/Next.js。
 2. **后端服务**：采用 FastAPI + Python 3.11，数据库默认 SQLite（本地开发），生产可切换 PostgreSQL；存储默认本地文件系统，生产可切换 MinIO/S3。
-3. **旧 H5 架构文件**：`src/assets/js/*`、`src/pages/*`、`src/components/*` 已清理完成。
+3. **前端过渡策略**：当前以 `index.html` → `src/product-app.js` 的艺术化单页为默认入口；`src/assets/js/*`、`src/pages/*` 以及五面板相关模块仍在仓库中，待真实数据链路稳定后再决定整合或清理。
 
 ### 未决
 
@@ -1153,11 +1153,11 @@ PassCriteria {
 
 ## 17. 参考文档
 
-- `docs/PROJECT.md`：本文件，产品需求总纲。
-- `docs/PROGRESS.md`：项目进度与任务拆分。
-- `docs/BACKEND_START.md`：后端起步与阶段划分。
-- `docs/TECHNICAL_RESEARCH.md`：技术栈调研与 AI pipeline 架构。
-- `docs/AUDIO_TO_TAB_PIPELINE.md`：音频 → 六线谱具体实现步骤。
+- `PROJECT.md`：本文件，产品需求总纲。
+- `PROGRESS.md`：项目进度与任务拆分。
+- `BACKEND_START.md`：后端起步与阶段划分。
+- `../TECHNICAL_RESEARCH.md`：技术栈调研与 AI pipeline 架构。
+- `AUDIO_TO_TAB_PIPELINE.md`：音频 → 六线谱具体实现步骤。
 - 当前项目代码：`src/` 与 `backend/` 目录下的实现。
 
 ---
@@ -1165,6 +1165,6 @@ PassCriteria {
 ## 18. 下一步
 
 1. 将后端谱面数据真正驱动音游模式，替换随机音符。
-2. 整合 `src/app.js` 与 `src/ui-demo.js`，让正式架构驱动 UI。
+2. 整合 `src/product-app.js`、`src/app.js` 与 `src/ui-demo.js`，让默认艺术化入口承接真实数据和音频能力。
 3. 实现视频-谱面时间轴对齐与播放光标同步。
 4. 开始实现 P0 路演闭环：视频导入 → 谱面加载 → 对齐 → 五面板跟练 → 实时检测 → 纠错 → 恢复速度 → 完成页。

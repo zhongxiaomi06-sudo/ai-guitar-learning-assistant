@@ -91,6 +91,7 @@
  * @property {number} [fret]
  * @property {number} pitch
  * @property {number} velocity
+ * @property {number} [rms]
  * @property {number} onsetTime
  * @property {number} duration
  */

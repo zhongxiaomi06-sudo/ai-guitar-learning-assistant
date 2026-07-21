@@ -12,6 +12,8 @@ import argparse
 import json
 import os
 import sys
+import tempfile
+from pathlib import Path
 
 # Add parent directory to import app.*
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -30,12 +32,40 @@ def main():
     parser.add_argument("--keep-work-dir", action="store_true", help="Keep intermediate audio files")
     args = parser.parse_args()
 
-    ts = [int(x) for x in args.time_signature.split("/")]
-    work_dir = os.path.join(os.path.dirname(args.output), "pipeline_work") if args.keep_work_dir else None
+    video_path = Path(args.video).expanduser().resolve()
+    if not video_path.is_file():
+        parser.error(f"video does not exist or is not a file: {video_path}")
+    if args.bpm <= 0:
+        parser.error("--bpm must be a positive integer")
+    try:
+        signature_parts = args.time_signature.split("/")
+        if len(signature_parts) != 2:
+            raise ValueError
+        ts = [int(part) for part in signature_parts]
+        if ts[0] <= 0 or ts[1] not in {1, 2, 4, 8, 16}:
+            raise ValueError
+    except ValueError:
+        parser.error("--time-signature must contain two supported positive values, e.g. 4/4")
+
+    output_path = Path(args.output).expanduser().resolve()
+    same_as_input = output_path == video_path
+    if not same_as_input and output_path.exists():
+        try:
+            same_as_input = os.path.samefile(video_path, output_path)
+        except OSError:
+            same_as_input = False
+    if same_as_input:
+        parser.error("--output must not overwrite the input video")
+    if output_path.exists() and output_path.is_dir():
+        parser.error("--output must be a file path, not a directory")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    work_dir = None
+    if args.keep_work_dir:
+        work_dir = tempfile.mkdtemp(prefix="pipeline_work_", dir=output_path.parent)
 
     pipeline = AudioPipeline()
     score = pipeline.run(
-        video_path=args.video,
+        video_path=str(video_path),
         title=args.title,
         duration=0.0,  # optional
         bpm=args.bpm,
@@ -44,12 +74,29 @@ def main():
         output_dir=work_dir,
     )
 
-    with open(args.output, "w", encoding="utf-8") as f:
-        json.dump(score, f, ensure_ascii=False, indent=2)
+    temp_output = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=output_path.parent,
+            prefix=f".{output_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as output_file:
+            temp_output = Path(output_file.name)
+            json.dump(score, output_file, ensure_ascii=False, indent=2)
+            output_file.write("\n")
+        os.replace(temp_output, output_path)
+    finally:
+        if temp_output is not None:
+            temp_output.unlink(missing_ok=True)
 
     total_notes = sum(len(beat["notes"]) for bar in score["bars"] for beat in bar["beats"])
-    print(f"Score written to {args.output}")
+    print(f"Score written to {output_path}")
     print(f"Bars: {len(score['bars'])}, Total notes: {total_notes}")
+    if work_dir:
+        print(f"Intermediate files kept in {work_dir}")
 
 
 if __name__ == "__main__":

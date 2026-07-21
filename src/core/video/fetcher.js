@@ -46,9 +46,14 @@ export class VideoFetcher {
    */
   static async enumerateAudioDevices() {
     if (!navigator.mediaDevices?.enumerateDevices) return [];
-    await navigator.mediaDevices.getUserMedia({ audio: true });
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    return devices.filter((d) => d.kind === 'audioinput');
+    let permissionStream = null;
+    try {
+      permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      return devices.filter((device) => device.kind === 'audioinput');
+    } finally {
+      permissionStream?.getTracks().forEach((track) => track.stop());
+    }
   }
 }
 

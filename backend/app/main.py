@@ -11,6 +11,8 @@ from app.config import get_settings
 from app.database import Base, engine
 
 settings = get_settings()
+cors_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
+cors_allow_credentials = settings.cors_allow_credentials and "*" not in cors_origins
 
 # Create database tables on startup (for MVP only; use Alembic in production)
 Base.metadata.create_all(bind=engine)
@@ -24,8 +26,8 @@ app = FastAPI(
 # Allow frontend served from Vite dev server or static files
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
