@@ -1,4 +1,8 @@
+import copy
+import json
 from io import BytesIO
+
+import pytest
 
 import app.api.courses as course_api
 from app.main import app
@@ -13,6 +17,56 @@ def upload_video(client, content=b"fake-mp4", filename="lesson.mp4", content_typ
     )
 
 
+def canonical_score_payload():
+    return {
+        "id": "score-1",
+        "title": "Morning study",
+        "sourceVideoUrl": "",
+        "localVideoPath": "",
+        "duration": 2,
+        "bpm": 120,
+        "timeSignature": [4, 4],
+        "key": "C",
+        "bars": [
+            {
+                "index": 1,
+                "startTime": 0,
+                "endTime": 2,
+                "difficulty": 1,
+                "beats": [
+                    {
+                        "startTime": 0,
+                        "endTime": 0.5,
+                        "notes": [
+                            {
+                                "string": 2,
+                                "fret": 1,
+                                "midi": 60,
+                                "startTime": 0.1,
+                                "endTime": 0.4,
+                            }
+                        ],
+                    },
+                    {"startTime": 0.5, "endTime": 1, "notes": []},
+                    {"startTime": 1, "endTime": 1.5, "notes": []},
+                    {"startTime": 1.5, "endTime": 2, "notes": []},
+                ],
+            }
+        ],
+        "createdAt": 1,
+        "updatedAt": 1,
+        "generatorVersion": "test-extra-field",
+    }
+
+
+def upload_score(client, course_id, payload):
+    encoded = payload if isinstance(payload, bytes) else json.dumps(payload).encode("utf-8")
+    return client.post(
+        f"/api/v1/courses/{course_id}/score",
+        files={"score": ("score.json", BytesIO(encoded), "application/json")},
+    )
+
+
 def test_course_video_score_and_delete_flow(client):
     created = upload_video(client)
     assert created.status_code == 201
@@ -24,18 +78,16 @@ def test_course_video_score_and_delete_flow(client):
     assert video.content == b"fake-mp4"
     assert video.headers["content-type"].startswith("video/mp4")
 
-    score_payload = b'{"id":"score-1","bars":[]}'
-    score = client.post(
-        f"/api/v1/courses/{course['id']}/score",
-        files={"score": ("score.json", BytesIO(score_payload), "application/json")},
-    )
+    score_payload = canonical_score_payload()
+    score = upload_score(client, course["id"], score_payload)
     assert score.status_code == 200
     assert score.json()["status"] == "ready"
     assert score.json()["progress"] == 100
+    assert "_score_" in score.json()["score_path"]
 
     fetched_score = client.get(f"/api/v1/courses/{course['id']}/score")
     assert fetched_score.status_code == 200
-    assert fetched_score.json() == {"id": "score-1", "bars": []}
+    assert fetched_score.json() == score_payload
 
     deleted = client.delete(f"/api/v1/courses/{course['id']}")
     assert deleted.status_code == 204
@@ -60,6 +112,81 @@ def test_score_upload_rejects_invalid_json(client):
     )
     assert invalid.status_code == 422
     assert client.get(f"/api/v1/courses/{course['id']}/score").status_code == 404
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda score: score.pop("bars"),
+        lambda score: score["bars"][0].pop("beats"),
+        lambda score: score["bars"][0]["beats"][0].pop("notes"),
+        lambda score: score.update({"duration": True}),
+        lambda score: score.update({"bpm": True}),
+        lambda score: score["bars"][0]["beats"][0]["notes"][0].update({"string": True}),
+        lambda score: score["bars"][0]["beats"][0]["notes"][0].update({"string": 7}),
+        lambda score: score["bars"][0]["beats"][0]["notes"][0].update({"fret": 20}),
+        lambda score: score["bars"][0]["beats"][0]["notes"][0].update({"midi": 84}),
+        lambda score: score["bars"][0]["beats"][0]["notes"][0].update({"midi": 61}),
+        lambda score: score["bars"][0]["beats"][0]["notes"][0].update(
+            {"startTime": 0.4, "endTime": 0.4}
+        ),
+        lambda score: score["bars"][0]["beats"][0]["notes"][0].update({"endTime": 2.1}),
+        lambda score: score.update({"duration": 601}),
+        lambda score: score.update({"bpm": 401}),
+        lambda score: score.update({"timeSignature": [4, 3]}),
+    ],
+)
+def test_score_upload_rejects_invalid_canonical_fields(client, mutate):
+    course = upload_video(client).json()
+    payload = copy.deepcopy(canonical_score_payload())
+    mutate(payload)
+
+    response = upload_score(client, course["id"], payload)
+
+    assert response.status_code == 422
+    assert client.get(f"/api/v1/courses/{course['id']}/score").status_code == 404
+
+
+@pytest.mark.parametrize("invalid_number", [b"NaN", b"Infinity", b"-Infinity", b"1e999"])
+def test_score_upload_rejects_non_finite_numbers(client, invalid_number):
+    course = upload_video(client).json()
+    raw_score = json.dumps(canonical_score_payload()).replace(
+        '"duration": 2',
+        f'"duration": {invalid_number.decode()}',
+    ).encode()
+
+    response = upload_score(client, course["id"], raw_score)
+
+    assert response.status_code == 422
+    assert client.get(f"/api/v1/courses/{course['id']}/score").status_code == 404
+
+
+def test_score_upload_rejects_timeline_beyond_known_course_duration(client):
+    course = upload_video(client).json()
+    updated = client.patch(
+        f"/api/v1/courses/{course['id']}",
+        json={"duration": 1},
+    )
+    assert updated.status_code == 200
+
+    response = upload_score(client, course["id"], canonical_score_payload())
+
+    assert response.status_code == 422
+
+
+def test_parse_queues_background_pipeline_once(client, monkeypatch):
+    course = upload_video(client).json()
+    queued = []
+    monkeypatch.setattr(course_api, "transcribe_course_task", lambda course_id: queued.append(course_id))
+
+    response = client.post(f"/api/v1/courses/{course['id']}/parse")
+    assert response.status_code == 202
+    assert response.json()["status"] == "processing"
+    assert response.json()["progress"] == 1
+    assert queued == [course["id"]]
+
+    duplicate = client.post(f"/api/v1/courses/{course['id']}/parse")
+    assert duplicate.status_code == 409
 
 
 def test_schema_bounds_and_url_validation(client):

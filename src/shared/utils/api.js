@@ -162,6 +162,7 @@ export const courses = {
   delete: (id) => request(coursePath(id), { method: 'DELETE' }),
   getVideoUrl: (id) => buildUrl(coursePath(id, '/video')),
   getScore: (id) => get(coursePath(id, '/score')),
+  parse: (id) => request(coursePath(id, '/parse'), { method: 'POST' }),
   uploadScore: (id, file) => {
     const form = new FormData();
     form.append('score', file);

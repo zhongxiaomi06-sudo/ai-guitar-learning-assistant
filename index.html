@@ -135,7 +135,7 @@
             <div>
               <p class="eyebrow"><span></span>ANALYSING</p>
               <h1 id="analysisTitle">AI 正在听懂这段演奏</h1>
-              <p>谱面、节拍与动作会逐层出现，你可以留在这里观看。</p>
+              <p>音符、弦位与六线谱会逐层出现，你可以留在这里观看。</p>
             </div>
             <div class="analysis-total" role="progressbar" aria-label="AI 解析整体进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-live="polite">
               <strong data-analysis-percent>0%</strong>
@@ -151,10 +151,10 @@
                   <div class="guitar-neck" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
                   <div class="player-silhouette" aria-hidden="true"></div>
                 </div>
-                <div class="detection-box detection-left"><span>左手 · 94%</span></div>
-                <div class="detection-box detection-right"><span>右手 · 91%</span></div>
-                <div class="detected-chord"><small>当前和弦</small><strong data-detected-chord>Am</strong></div>
-                <div class="media-time">00:18.420</div>
+                <div class="detection-box detection-left" aria-hidden="true"><span>音频轨 · READY</span></div>
+                <div class="detection-box detection-right" aria-hidden="true"><span>谱面轨 · SYNC</span></div>
+                <div class="detected-chord"><small>处理阶段</small><strong data-detected-chord>等待</strong></div>
+                <div class="media-time">--:--.---</div>
               </div>
               <div class="analysis-wave" data-waveform aria-label="正在生成的音频波形"></div>
               <div class="analysis-measures">
@@ -168,16 +168,16 @@
                 <button class="text-button" type="button" data-action="skip-analysis">快速完成</button>
               </div>
               <ol>
-                <li data-analysis-step="0"><i></i><div><strong>提取视频与音频</strong><span>等待开始</span></div><b>01</b></li>
-                <li data-analysis-step="1"><i></i><div><strong>识别吉他声音</strong><span>等待开始</span></div><b>02</b></li>
-                <li data-analysis-step="2"><i></i><div><strong>检测速度、节拍与小节</strong><span>等待开始</span></div><b>03</b></li>
-                <li data-analysis-step="3"><i></i><div><strong>识别单音与和弦</strong><span>等待开始</span></div><b>04</b></li>
-                <li data-analysis-step="4"><i></i><div><strong>生成六线谱</strong><span>等待开始</span></div><b>05</b></li>
-                <li data-analysis-step="5"><i></i><div><strong>定位左手与右手</strong><span>等待开始</span></div><b>06</b></li>
-                <li data-analysis-step="6"><i></i><div><strong>对齐谱面、声音和画面</strong><span>等待开始</span></div><b>07</b></li>
-                <li data-analysis-step="7"><i></i><div><strong>自动拆分练习片段</strong><span>等开始</span></div><b>08</b></li>
+                <li data-analysis-step="0"><i></i><div><strong>安全读取视频</strong><span>等待开始</span></div><b>01</b></li>
+                <li data-analysis-step="1"><i></i><div><strong>提取分析音轨</strong><span>等待开始</span></div><b>02</b></li>
+                <li data-analysis-step="2"><i></i><div><strong>识别吉他音高</strong><span>等待开始</span></div><b>03</b></li>
+                <li data-analysis-step="3"><i></i><div><strong>合并碎音符</strong><span>等待开始</span></div><b>04</b></li>
+                <li data-analysis-step="4"><i></i><div><strong>求解可演奏弦位</strong><span>等待开始</span></div><b>05</b></li>
+                <li data-analysis-step="5"><i></i><div><strong>生成六线谱</strong><span>等待开始</span></div><b>06</b></li>
+                <li data-analysis-step="6"><i></i><div><strong>校验谱面数据</strong><span>等待开始</span></div><b>07</b></li>
+                <li data-analysis-step="7"><i></i><div><strong>准备跟练课程</strong><span>等待开始</span></div><b>08</b></li>
               </ol>
-              <button class="primary-button full-width" type="button" data-action="analysis-complete" hidden>
+              <button class="primary-button full-width" type="button" data-analysis-action data-action="analysis-complete" hidden>
                 查看课程概览 <span>→</span>
               </button>
             </aside>
@@ -186,7 +186,7 @@
           <div class="analysis-discovery" aria-live="polite">
             <span class="pulse-dot"></span>
             <p><strong data-analysis-message>正在准备解析…</strong><span data-analysis-detail>结果会在这里实时出现</span></p>
-            <div class="discovery-values"><span>92 BPM</span><span>4/4</span><span>Am · C · G · Em</span></div>
+            <div class="discovery-values"><span data-analysis-bpm>92 BPM</span><span data-analysis-signature>4/4</span><span data-analysis-mode>示例课程</span></div>
           </div>
         </div>
       </section>

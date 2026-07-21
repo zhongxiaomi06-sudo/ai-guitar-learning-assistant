@@ -19,9 +19,9 @@
 
 - `index.html` 是默认产品入口，由 `src/product-app.js` 驱动，并通过 `#/home` 等哈希路由切换完整流程。
 - `home.html` 仅负责兼容旧地址并重定向到艺术化单页首页。
-- 后端已经具备课程 CRUD、视频上传/读取和谱面 JSON 接口；默认入口会展示真实后端状态，不会把等待中的任务误报为解析完成。
+- 后端已经具备课程 CRUD、视频上传/读取、谱面 JSON 与解析触发接口；默认入口会展示并轮询真实后端状态，不会把等待中的任务误报为解析完成。
 - Web Audio / YIN 音高检测已经接入默认跟练页，可显示实时音高；目标谱面评分和纠错闭环尚未完成。
-- 当前“AI 解析”主要是产品流程演示；任意视频的自动扒谱仍属于后续流水线，不应视为已经完成的真实 AI 能力。
+- FFmpeg + Basic Pitch 音频转谱 MVP 已接入上传流程，可生成 Canonical Score JSON；模型输出仍需人工校验，且尚未接入持久任务队列，不能视为生产级自动扒谱。
 
 ## 技术栈
 
@@ -33,7 +33,7 @@
 | 后端框架 | FastAPI + Python 3.11 |
 | 后端数据库 | SQLite（本地开发）/ PostgreSQL（Docker） |
 | 后端存储 | 本地文件系统 / MinIO |
-| 音频处理 | FFmpeg + Web Audio API（前端 YIN） |
+| 音频处理 | FFmpeg + Basic Pitch（后端转谱）/ Web Audio API（前端 YIN） |
 | 部署 | Docker Compose（可选） |
 
 > **过渡期说明**：仓库保留了艺术化单页与较早的五面板实现。构建时以 `index.html` → `src/product-app.js` 为准；`src/main.js`、`src/home.js`、`src/app.js` 与 `src/ui-demo.js` 作为后端和音频能力的过渡实现保留，后续会择优整合，而不是假定它们已经成为默认页面入口。
@@ -45,13 +45,14 @@
 ```
 .
 ├── docs/                      # 产品、技术、进度文档
-├── backend/                   # FastAPI 后端（Step 1 已完成）
+├── backend/                   # FastAPI 后端与音频转谱流水线
 │   ├── app/
 │   │   ├── main.py            # API 入口
 │   │   ├── api/               # 路由
 │   │   ├── models/            # SQLAlchemy 模型
 │   │   ├── schemas/           # Pydantic 模型
-│   │   └── services/          # 存储服务
+│   │   ├── services/          # 存储、转录、弦品求解与谱面构建
+│   │   └── tasks/             # 进程内后台解析任务（MVP）
 │   ├── docker-compose.yml     # PostgreSQL + Redis + MinIO
 │   ├── Dockerfile
 │   └── requirements.txt
@@ -95,11 +96,12 @@
 - 分析、概览、跟练、专项练习和结果页的可交互产品流程。
 - 麦克风授权、音频分析和音高检测的基础模块。
 - FastAPI 课程、视频、谱面接口及可切换的本地/MinIO 存储层。
+- FFmpeg + Basic Pitch 转录、可演奏弦品求解与 Canonical Score JSON 构建。
 - 键盘导航、跳过链接、模态框焦点约束和减少动态效果适配。
 
 ### 尚未完成
 
-- 任意视频的真实 AI 自动扒谱与异步任务队列。
+- 生产级自动转谱质量、人工校谱能力与 Celery/Redis 持久任务队列。
 - 后端谱面驱动的播放器时间轴、音符生成和目标匹配。
 - 经真实吉他输入验证的 Perfect / Good / Miss 评分、纠错和自适应调速闭环。
 - 用户认证、权限隔离和生产级媒体处理。
@@ -148,6 +150,7 @@ uvicorn app.main:app --reload  # http://localhost:8000
 - 课程列表：`GET /api/v1/courses`
 - 课程详情：`GET /api/v1/courses/{id}`
 - 上传视频：`POST /api/v1/courses/upload` (multipart/form-data: title, video)
+- 触发转谱：`POST /api/v1/courses/{id}/parse`
 - 提交 URL：`POST /api/v1/courses/from-url` (JSON: title, source_url)
 - 更新课程：`PATCH /api/v1/courses/{id}`
 - 删除课程：`DELETE /api/v1/courses/{id}`
@@ -172,7 +175,7 @@ uvicorn app.main:app --reload  # http://localhost:8000
 3. 完善麦克风实时音高检测与和弦识别。
 4. 将匹配反馈从演示模式接入真实音频比对。
 5. 实现自适应调速、A/B 循环、错误回看。
-6. 后端 AI 扒谱与合规视频抓取服务接入。
+6. 将进程内解析任务迁移到持久队列，并补齐人工校谱与合规视频抓取。
 
 ---
 

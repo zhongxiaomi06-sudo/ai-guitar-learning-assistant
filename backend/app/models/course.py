@@ -19,7 +19,7 @@ class Course(Base):
     time_signature = Column(String, default="4/4")
     key = Column(String, default="C")
     metadata_json = Column(JSON, default=dict)
-    status = Column(String, default="pending")  # pending / ready / error
+    status = Column(String, default="pending")  # pending / processing / ready / error / completed
     progress = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

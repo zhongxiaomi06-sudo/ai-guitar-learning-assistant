@@ -24,6 +24,26 @@ test('course delete accepts an empty 204 response', async () => {
   }
 });
 
+test('course parse uses an encoded id and POST method', async () => {
+  const originalFetch = globalThis.fetch;
+  let request = null;
+  globalThis.fetch = async (url, options) => {
+    request = { url, options };
+    return new Response(JSON.stringify({ id: 'course/id', status: 'processing' }), {
+      status: 202,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  try {
+    const course = await courses.parse('course/id');
+    assert.equal(course.status, 'processing');
+    assert.equal(request.url, '/api/v1/courses/course%2Fid/parse');
+    assert.equal(request.options.method, 'POST');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('API errors preserve backend status and detail', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ detail: 'Invalid course' }), {

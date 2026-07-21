@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List, Optional
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ from app.database import get_db
 from app.models.course import Course as CourseModel
 from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate
 from app.services.storage import FileTooLargeError, InvalidStorageKeyError, StorageService, get_storage
+from app.tasks.transcribe import transcribe_course_task
 
 router = APIRouter(prefix="/api/v1/courses", tags=["courses"])
 settings = get_settings()
@@ -207,3 +208,61 @@ async def get_score(
         raise HTTPException(status_code=404, detail="Score file not found")
 
     return _storage_response(local_path, media_type="application/json")
+
+
+@router.post(
+    "/{course_id}/parse",
+    response_model=CourseResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def parse_course(
+    course_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage),
+):
+    """Queue the audio → tab pipeline without blocking the API event loop."""
+    course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    if not course.video_path:
+        raise HTTPException(status_code=400, detail="Course has no video")
+    if course.status == "processing":
+        raise HTTPException(status_code=409, detail="Course is already being parsed")
+    if course.status == "ready" and course.score_path:
+        return course
+    if not storage.get_path(course.video_path):
+        raise HTTPException(status_code=404, detail="Video file not found")
+
+    # Atomically claim the course using the state we just observed. Without a
+    # compare-and-set, two near-simultaneous requests can both enqueue an
+    # expensive transcription task before either session sees "processing".
+    expected_status = course.status
+    expected_score_path = course.score_path
+    claim = db.query(CourseModel).filter(
+        CourseModel.id == course_id,
+        CourseModel.status == expected_status,
+    )
+    if expected_score_path is None:
+        claim = claim.filter(CourseModel.score_path.is_(None))
+    else:
+        claim = claim.filter(CourseModel.score_path == expected_score_path)
+
+    try:
+        claimed = claim.update(
+            {CourseModel.status: "processing", CourseModel.progress: 1},
+            synchronize_session=False,
+        )
+        if claimed != 1:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="Course state changed; retry the request")
+        db.commit()
+        db.refresh(course)
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        raise
+
+    background_tasks.add_task(transcribe_course_task, course_id)
+    return course

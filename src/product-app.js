@@ -5,7 +5,7 @@
 
 import { GuitarDetector } from './core/audio/detector.js';
 import { midiToNoteName } from './shared/utils/index.js';
-import { courses } from './shared/utils/api.js';
+import { ApiError, courses } from './shared/utils/api.js';
 
 const ROUTES = new Set(['home', 'analysis', 'overview', 'player', 'focus', 'results', 'library']);
 const MAX_FILE_SIZE = 1024 * 1024 * 1024;
@@ -13,14 +13,14 @@ const DEMO_DURATION = 48;
 const STORAGE_KEY = 'xianjian-ui-state';
 
 const ANALYSIS_RESULTS = [
-  { title: '已提取视频与音频', detail: '检测到立体声音轨 · 48 kHz', step: '音频提取完成' },
-  { title: '已分离吉他演奏', detail: '吉他声部清晰，环境噪声较低', step: '吉他声音可识别' },
-  { title: '找到 92 BPM 与 4/4 拍', detail: '已定位 16 个小节', step: '92 BPM · 4/4 拍' },
-  { title: '正在识别音符与和弦', detail: '已找到 Am、C、G、Em', step: '识别到 4 个主要和弦' },
-  { title: '六线谱正在成形', detail: '已定位 64 个演奏事件', step: '64 个谱面事件' },
-  { title: '已定位双手动作', detail: '左手可见度 94% · 右手 91%', step: '双手动作轨已生成' },
-  { title: '正在对齐所有时间轴', detail: '视频、声音、谱面与动作已同步', step: '时间轴对齐完成' },
-  { title: '课程已准备就绪', detail: '已生成 4 个可独立练习的片段', step: '4 个练习片段' },
+  { title: '已安全读取视频', detail: '媒体文件已准备进入音频分析', step: '视频读取完成' },
+  { title: '已提取分析音轨', detail: '音轨已转换为单声道分析格式', step: '音轨提取完成' },
+  { title: '正在识别吉他音高', detail: '忽略了超出标准吉他音域的检测', step: '音高识别完成' },
+  { title: '正在合并碎音符', detail: '相邻的同音高事件已整理', step: '音符时值已整理' },
+  { title: '正在求解可演奏弦位', detail: '每个音符正在映射到六根琴弦', step: '弦与品位已求解' },
+  { title: '六线谱正在成形', detail: '音符正在按时间轴排入谱面', step: '六线谱已生成' },
+  { title: '正在校验谱面数据', detail: '时间、弦位与媒体时长正在对齐', step: '谱面数据已校验' },
+  { title: '课程已准备就绪', detail: '视频与六线谱已可进入跟练', step: '课程已准备' },
 ];
 
 const uploadJobs = new WeakMap();
@@ -181,7 +181,8 @@ function formatTime(seconds, includeMilliseconds = false) {
 
 function validateVideo(file) {
   const extension = file.name.split('.').pop()?.toLowerCase();
-  if (!['mp4', 'mov'].includes(extension) && !['video/mp4', 'video/quicktime'].includes(file.type)) {
+  const supportedTypes = ['video/mp4', 'video/quicktime'];
+  if (!['mp4', 'mov'].includes(extension) || (file.type && !supportedTypes.includes(file.type))) {
     return '暂不支持这种格式，请选择 MP4 或 MOV 视频。';
   }
   if (file.size > MAX_FILE_SIZE) {
@@ -249,8 +250,8 @@ async function selectVideo(file) {
   state.courseTitle = file.name.replace(/\.[^.]+$/, '') || '未命名吉他课程';
   state.duration = DEMO_DURATION;
   state.mediaDuration = null;
-  state.bpm = 92;
-  state.timeSignature = '4/4';
+  state.bpm = null;
+  state.timeSignature = '--';
   restoreDefaultScoreEvents();
   const pageUrl = new URL(window.location.href);
   pageUrl.searchParams.delete('course');
@@ -333,11 +334,25 @@ function updateCourseCopy() {
     element.textContent = formatTime(state.duration);
   });
   $$('[data-course-bpm]').forEach((element) => {
-    element.textContent = String(state.bpm || 92);
+    element.textContent = Number.isFinite(state.bpm) && state.bpm > 0 ? String(state.bpm) : '--';
   });
   $$('[data-time-signature]').forEach((element) => {
     element.textContent = state.timeSignature || '4/4';
   });
+  const analysisBpm = $('[data-analysis-bpm]');
+  if (analysisBpm) {
+    analysisBpm.textContent = Number.isFinite(state.bpm) && state.bpm > 0
+      ? `${state.bpm} BPM`
+      : '节拍待定';
+  }
+  const analysisSignature = $('[data-analysis-signature]');
+  if (analysisSignature) analysisSignature.textContent = state.timeSignature || '--';
+  const analysisMode = $('[data-analysis-mode]');
+  if (analysisMode) {
+    analysisMode.textContent = state.remoteCourse
+      ? (state.remoteCourse.status === 'ready' ? '六线谱已生成' : '后台转谱')
+      : (state.file ? '等待转谱' : '示例课程');
+  }
   const seekTrack = $('[data-seek-track]');
   seekTrack?.setAttribute('aria-valuemax', String(Math.max(1, state.duration)));
   savePreferences();
@@ -477,7 +492,7 @@ async function activateRemoteCourse(course, loadId = ++state.courseLoadId) {
   state.duration = Number.isFinite(courseDuration) && courseDuration > 0 ? courseDuration : DEMO_DURATION;
   state.mediaDuration = null;
   const courseBpm = Number(course.bpm);
-  state.bpm = Number.isFinite(courseBpm) && courseBpm > 0 ? Math.min(400, Math.round(courseBpm)) : 92;
+  state.bpm = Number.isFinite(courseBpm) && courseBpm > 0 ? Math.min(400, Math.round(courseBpm)) : null;
   state.timeSignature = normalizeTimeSignature(course.time_signature);
   state.score = null;
   restoreDefaultScoreEvents();
@@ -639,17 +654,43 @@ async function persistSelectedCourse() {
   const job = courses.upload(selectedFile, selectedTitle)
     .then(async (course) => {
       state.backendAvailable = true;
+      let activeCourse = course;
       if (state.file === selectedFile) {
-        state.remoteCourse = course;
+        state.remoteCourse = activeCourse;
         state.remoteVideoUrl = course.video_path ? courses.getVideoUrl(course.id) : null;
-        if (state.view === 'analysis' && course.status !== 'ready') {
-          renderRemoteAnalysisStatus(course);
+        renderRemoteAnalysisStatus(activeCourse);
+        showToast('课程已保存，正在启动后台音频转谱。');
+      }
+      try {
+        activeCourse = await courses.parse(course.id);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+          // Another tab/request may have claimed the same course first. Read
+          // the authoritative state instead of misreporting a running task.
+          try {
+            activeCourse = await courses.get(course.id);
+          } catch {
+            activeCourse = { ...course, status: 'error', progress: 0 };
+          }
+        } else {
+          activeCourse = { ...course, status: 'error', progress: 0 };
+          if (state.file === selectedFile) {
+            showToast('视频已保存，但转谱任务未能启动，可稍后从课程库重试。', 'error');
+          }
+        }
+      }
+      if (state.file === selectedFile) {
+        state.remoteCourse = activeCourse;
+        const url = new URL(window.location.href);
+        url.searchParams.set('course', course.id);
+        window.history.replaceState({}, '', url);
+        if (state.view === 'analysis') {
+          renderRemoteAnalysisStatus(activeCourse);
           scheduleCoursePolling();
         }
-        showToast('课程已保存；当前版本需单独启动自动转谱服务。');
       }
       await refreshBackendCourses();
-      return course;
+      return activeCourse;
     })
     .catch(() => {
       if (state.file === selectedFile) {
@@ -709,8 +750,26 @@ function resetAnalysis() {
   $('.analysis-total')?.setAttribute('aria-valuenow', '0');
   $('[data-analysis-message]').textContent = '正在准备解析…';
   $('[data-analysis-detail]').textContent = '结果会在这里实时出现';
-  $('[data-action="analysis-complete"]').hidden = true;
+  const skipButton = $('[data-action="skip-analysis"]');
+  if (skipButton) skipButton.hidden = false;
+  setAnalysisAction('hidden');
   $$('.analysis-wave .wave-bar').forEach((bar) => bar.classList.remove('is-visible', 'is-active'));
+}
+
+function setAnalysisAction(mode) {
+  const button = $('[data-analysis-action]');
+  if (!button) return;
+  if (mode === 'hidden') {
+    button.hidden = true;
+    return;
+  }
+  const retry = mode === 'retry';
+  button.hidden = false;
+  button.dataset.action = retry ? 'retry-analysis' : 'analysis-complete';
+  button.replaceChildren(
+    document.createTextNode(retry ? '重新启动解析 ' : '查看课程概览 '),
+    Object.assign(document.createElement('span'), { textContent: '→' }),
+  );
 }
 
 function clearCoursePolling() {
@@ -725,6 +784,8 @@ function renderRemoteAnalysisStatus(course) {
   const ready = course?.status === 'ready';
   const failed = course?.status === 'error';
   const completedSteps = ready ? ANALYSIS_RESULTS.length : Math.max(1, Math.floor(progress / 12.5));
+  const skipButton = $('[data-action="skip-analysis"]');
+  if (skipButton) skipButton.hidden = true;
 
   $$('[data-analysis-step]').forEach((item, index) => {
     const done = index < completedSteps;
@@ -745,9 +806,10 @@ function renderRemoteAnalysisStatus(course) {
     : (failed ? '解析未能完成' : '视频已保存，等待自动转谱服务');
   $('[data-analysis-detail]').textContent = ready
     ? '谱面与视频已可以进入同步跟练'
-    : (failed ? '请返回并重新上传，或稍后查看课程状态' : `后端进度 ${progress}% · 当前版本尚未内置 AI 转谱工作进程`);
-  $('[data-action="analysis-complete"]').hidden = !ready;
+    : (failed ? '可直接重新启动解析，无需再次上传视频' : `后端进度 ${progress}% · 音频转谱正在后台运行，可稍后返回查看`);
+  setAnalysisAction(ready ? 'complete' : (failed ? 'retry' : 'hidden'));
   state.analysisComplete = ready;
+  updateCourseCopy();
 
   const bars = $$('.analysis-wave .wave-bar');
   const visibleCount = Math.round(shownProgress / 100 * bars.length);
@@ -784,6 +846,40 @@ function scheduleCoursePolling() {
     }
     if (loadId === state.courseLoadId) scheduleCoursePolling();
   }, 3000);
+}
+
+async function retryRemoteAnalysis() {
+  const course = state.remoteCourse;
+  if (!course?.id || course.status !== 'error') return;
+  const button = $('[data-analysis-action]');
+  if (button) {
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+  }
+  try {
+    let freshCourse;
+    try {
+      freshCourse = await courses.parse(course.id);
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 409) throw error;
+      freshCourse = await courses.get(course.id);
+    }
+    if (state.remoteCourse?.id !== course.id) return;
+    state.remoteCourse = freshCourse;
+    renderRemoteAnalysisStatus(freshCourse);
+    scheduleCoursePolling();
+    showToast('已重新启动后台音频转谱。');
+  } catch {
+    if (state.remoteCourse?.id === course.id) {
+      renderRemoteAnalysisStatus(course);
+      showToast('暂时无法重新启动解析，请稍后再试。', 'error');
+    }
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+    }
+  }
 }
 
 function beginAnalysis() {
@@ -824,7 +920,9 @@ function advanceAnalysis() {
   $('.analysis-total')?.setAttribute('aria-valuenow', String(percent));
   $('[data-analysis-message]').textContent = current.title;
   $('[data-analysis-detail]').textContent = current.detail;
-  $('[data-detected-chord]').textContent = ['Am', 'Am', 'C', 'C', 'G', 'G', 'Em', 'Em'][state.analysisIndex];
+  $('[data-detected-chord]').textContent = [
+    '读取', '音轨', '音高', '整理', '弦位', '谱面', '校验', '完成',
+  ][state.analysisIndex];
 
   const bars = $$('.analysis-wave .wave-bar');
   const visibleCount = Math.round(((state.analysisIndex + 1) / ANALYSIS_RESULTS.length) * bars.length);
@@ -856,7 +954,7 @@ function finishAnalysis() {
   $('.analysis-total')?.setAttribute('aria-valuenow', '100');
   $('[data-analysis-message]').textContent = '课程已生成';
   $('[data-analysis-detail]').textContent = '16 小节 · 64 个音符 · 4 个练习片段';
-  $('[data-action="analysis-complete"]').hidden = false;
+  setAnalysisAction('complete');
 }
 
 function buildWaveforms() {
@@ -932,7 +1030,7 @@ async function allowMicrophone() {
     state.micAllowed = true;
     updateMicrophoneUI();
     closeLayer($('[data-mic-modal]'));
-    showToast('麦克风已连接 · 环境噪声较低 · 预计延迟 42 ms');
+    showToast('麦克风已连接 · 实时音高检测已开始');
     if (state.pendingView) navigate(state.pendingView);
     state.pendingView = null;
   } catch {
@@ -1284,6 +1382,9 @@ function handleAction(action, element) {
       break;
     case 'analysis-complete':
       navigate('overview');
+      break;
+    case 'retry-analysis':
+      void retryRemoteAnalysis();
       break;
     case 'preview-course': {
       const video = $('#overviewVideo');
