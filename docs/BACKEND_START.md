@@ -116,15 +116,24 @@ class Course(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 ```
 
-### 4. 核心 API（`api/courses.py`）
+### 4. 核心 API（`api/courses.py` / `api/score.py` / `api/practice.py`）
 
 - `POST /api/v1/courses/upload` — 本地上传视频，生成课程，返回 `course_id`。
 - `POST /api/v1/courses/from-url` — 提交 URL，后端排队下载（第一阶段可返回占位）。
 - `GET /api/v1/courses` — 课程列表。
 - `GET /api/v1/courses/{id}` — 课程详情。
+- `PATCH /api/v1/courses/{id}` — 更新课程元数据。
 - `DELETE /api/v1/courses/{id}` — 删除课程。
 - `GET /api/v1/courses/{id}/video` — 返回视频流或预签名 URL。
 - `GET /api/v1/courses/{id}/score` — 返回谱面 JSON。
+- `POST /api/v1/courses/{id}/quality` — 提取音频并检查输入质量（音量、噪声、时长）。
+- `POST /api/v1/courses/{id}/parse` — 排队音频 → 六线谱解析任务。
+- `GET /api/v1/courses/{id}/timeline` — 返回统一时间轴演奏事件（含视频/音频时间、弦品、手型提示）。
+- `GET /api/v1/courses/{id}/segments` — 返回自动拆分练习片段与达标条件。
+- `POST /api/v1/courses/{id}/score` — 上传人工精修 Canonical Score JSON。
+- `POST /api/v1/practice/results` — 提交一次练习检测事件。
+- `GET /api/v1/practice/results` — 查询练习事件。
+- `GET /api/v1/practice/summary/{course_id}` — 汇总正确率、节奏偏差等统计。
 
 ### 5. 第一阶段不做的
 

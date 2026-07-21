@@ -97,7 +97,11 @@ guitar/
 - [x] 合并 agent audit fixes 分支（CI、测试、产品化前端、后端增强）
 - [x] 修复 Basic Pitch 依赖安装问题（Python 3.11+ 绕过 TensorFlow）
 - [x] 验证前后端开发服务器 API 连通性（CORS、课程列表、视频、谱面、解析排队）
-- [x] 134 后端测试 + 15 前端测试全部通过
+- [x] 统一时间轴 API：`GET /api/v1/courses/{id}/timeline` 输出事件级视频/音频时间、弦品、手型
+- [x] 练习片段自动生成：`GET /api/v1/courses/{id}/segments` 拆分片段并给出达标条件
+- [x] 练习结果存储 API：`POST /api/v1/practice/results` + 查询 + 汇总统计
+- [x] 视频音频输入质量检查：`POST /api/v1/courses/{id}/quality`
+- [x] 146 后端测试 + 15 前端测试全部通过
 
 ## 待办
 

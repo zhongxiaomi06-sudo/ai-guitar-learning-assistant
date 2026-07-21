@@ -21,7 +21,7 @@ os.environ["CORS_ORIGINS"] = "http://testserver"
 os.environ["CORS_ALLOW_CREDENTIALS"] = "false"
 os.environ["DEBUG"] = "false"
 
-from app.database import Base, engine  # noqa: E402
+from app.database import Base, engine, SessionLocal  # noqa: E402
 from app.main import app  # noqa: E402
 
 
@@ -38,3 +38,12 @@ def client():
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def db_session():
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
