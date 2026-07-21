@@ -121,6 +121,23 @@ export function uid(prefix = 'id') {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString(36)}`;
 }
 
+/**
+ * 吉他 MIDI 音高映射到琴弦（lane 0-5，0 为 1 弦/高音 E）
+ * @param {number} midi
+ * @returns {number} lane 0-5，或 -1 表示无法识别
+ */
+export function midiToStringLane(midi) {
+  if (midi <= 0) return -1;
+  // 标准调弦开放弦 MIDI：E2=40 A2=45 D3=50 G3=55 B3=59 E4=64
+  // 按频段边界映射到 lane（0=1弦 到 5=6弦）
+  if (midi >= 62.5) return 0; // 1 弦 E4
+  if (midi >= 57.5) return 1; // 2 弦 B3
+  if (midi >= 52.5) return 2; // 3 弦 G3
+  if (midi >= 47.5) return 3; // 4 弦 D3
+  if (midi >= 42.5) return 4; // 5 弦 A2
+  return 5;                   // 6 弦 E2
+}
+
 export const utils = {
   safeJSON,
   debounce,
@@ -132,6 +149,7 @@ export const utils = {
   clamp,
   formatTime,
   uid,
+  midiToStringLane,
 };
 
 export default utils;

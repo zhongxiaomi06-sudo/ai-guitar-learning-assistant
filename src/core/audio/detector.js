@@ -18,6 +18,7 @@ export class GuitarDetector {
     this.analyzer = new AudioAnalyzer(audioContext);
     this.source = null;
     this.isListening = false;
+    this.prevRms = 0;
   }
 
   /**
@@ -51,11 +52,14 @@ export class GuitarDetector {
    * }}
    */
   getDetection() {
+    const pitch = this.analyzer.detectPitch();
+    const { onset, rms } = this.analyzer.detectOnset(0.02, this.prevRms);
+    this.prevRms = rms;
     return {
       time: this.audioContext.currentTime,
-      pitch: this.analyzer.detectPitch(),
-      onset: this.analyzer.detectOnset(),
-      rms: this.analyzer.getRMS(),
+      pitch,
+      onset,
+      rms,
     };
   }
 
