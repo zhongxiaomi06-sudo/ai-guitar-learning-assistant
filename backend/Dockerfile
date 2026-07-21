@@ -2,12 +2,17 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies for psycopg2 and future audio processing
+# Install system dependencies for psycopg2 and audio/video processing
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     gcc \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
+
+# Basic Pitch declares tensorflow as a requirement for python>=3.11, but the
+# ONNX model path works with onnxruntime only. Install it without dependencies.
+COPY requirements-pipeline.txt .
+RUN pip install --no-cache-dir --no-deps -r requirements-pipeline.txt
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

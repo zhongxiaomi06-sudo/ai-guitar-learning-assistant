@@ -1,0 +1,5 @@
+# Pipeline-only package.
+# Basic Pitch 0.4.0 declares tensorflow as a requirement for python>=3.11,
+# but we use the ONNX model path. Install with --no-deps:
+#     pip install --no-deps -r requirements-pipeline.txt
+basic-pitch==0.4.0

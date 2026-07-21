@@ -179,6 +179,27 @@ class Course(Base):
 2. **后端是否独立仓库**：先放在同一仓库 `guitar/backend/`，等 MVP 验证后再拆。
 3. **本地开发是否用 Docker**：默认使用 SQLite + 本地文件存储，零配置即可运行；Docker Compose 用于需要 PostgreSQL + MinIO 的环境。
 
+## 安装依赖
+
+创建虚拟环境并安装后端依赖（Basic Pitch 在 Python 3.11+ 的 PyPI 元数据会声明 tensorflow，但我们使用 ONNX 路径，因此需要先 `--no-deps` 安装）：
+
+```bash
+cd backend
+python -m venv .venv
+# macOS / Linux
+source .venv/bin/activate
+# Windows PowerShell
+# .venv\Scripts\Activate.ps1
+
+pip install --no-deps -r requirements-pipeline.txt
+pip install -r requirements.txt
+
+# 开发测试依赖
+pip install -r requirements-dev.txt
+```
+
+Docker 构建已内置上述两步（先 `requirements-pipeline.txt --no-deps`，再 `requirements.txt`）。
+
 ## 运行方式
 
 启动后端（SQLite 默认）：
