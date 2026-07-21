@@ -35,14 +35,14 @@ def main():
     video_path = Path(args.video).expanduser().resolve()
     if not video_path.is_file():
         parser.error(f"video does not exist or is not a file: {video_path}")
-    if args.bpm <= 0:
-        parser.error("--bpm must be a positive integer")
+    if not 1 <= args.bpm <= 400:
+        parser.error("--bpm must be between 1 and 400")
     try:
         signature_parts = args.time_signature.split("/")
         if len(signature_parts) != 2:
             raise ValueError
         ts = [int(part) for part in signature_parts]
-        if ts[0] <= 0 or ts[1] not in {1, 2, 4, 8, 16}:
+        if not 1 <= ts[0] <= 32 or ts[1] not in {1, 2, 4, 8, 16}:
             raise ValueError
     except ValueError:
         parser.error("--time-signature must contain two supported positive values, e.g. 4/4")
@@ -85,7 +85,7 @@ def main():
             delete=False,
         ) as output_file:
             temp_output = Path(output_file.name)
-            json.dump(score, output_file, ensure_ascii=False, indent=2)
+            json.dump(score, output_file, ensure_ascii=False, indent=2, allow_nan=False)
             output_file.write("\n")
         os.replace(temp_output, output_path)
     finally:

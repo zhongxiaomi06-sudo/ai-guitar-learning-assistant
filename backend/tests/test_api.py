@@ -83,6 +83,9 @@ def test_course_video_score_and_delete_flow(client):
     assert score.status_code == 200
     assert score.json()["status"] == "ready"
     assert score.json()["progress"] == 100
+    assert score.json()["duration"] == 2
+    assert score.json()["bpm"] == 120
+    assert score.json()["time_signature"] == "4/4"
     assert "_score_" in score.json()["score_path"]
 
     fetched_score = client.get(f"/api/v1/courses/{course['id']}/score")
@@ -194,6 +197,26 @@ def test_schema_bounds_and_url_validation(client):
     assert client.patch(
         f"/api/v1/courses/{course['id']}",
         json={"progress": 101},
+    ).status_code == 422
+    assert client.patch(
+        f"/api/v1/courses/{course['id']}",
+        json={"progress": 50},
+    ).status_code == 422
+    assert client.patch(
+        f"/api/v1/courses/{course['id']}",
+        json={"status": "ready"},
+    ).status_code == 422
+    metadata_update = client.patch(
+        f"/api/v1/courses/{course['id']}",
+        json={"bpm": 96, "time_signature": "6/8", "key": "Am"},
+    )
+    assert metadata_update.status_code == 200
+    assert metadata_update.json()["bpm"] == 96
+    assert metadata_update.json()["time_signature"] == "6/8"
+    assert metadata_update.json()["key"] == "Am"
+    assert client.patch(
+        f"/api/v1/courses/{course['id']}",
+        json={"time_signature": "4/3"},
     ).status_code == 422
     assert client.get("/api/v1/courses?skip=-1").status_code == 422
     assert client.post(

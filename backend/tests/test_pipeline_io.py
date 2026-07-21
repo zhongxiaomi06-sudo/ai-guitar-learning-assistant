@@ -2,7 +2,7 @@ import subprocess
 import sys
 import traceback
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
@@ -28,6 +28,73 @@ def test_local_pipeline_run_does_not_initialize_configured_storage(monkeypatch):
 
     assert score["title"] == "Local run"
     assert score["duration"] == 1.0
+
+
+def test_pipeline_rejects_long_media_before_audio_or_model_work(monkeypatch):
+    monkeypatch.setattr(
+        audio_pipeline,
+        "extract_audio",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("audio extraction must not start")
+        ),
+    )
+    monkeypatch.setattr(
+        audio_pipeline,
+        "transcribe_audio",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("transcription must not start")
+        ),
+    )
+
+    with pytest.raises(ValueError, match="600-second limit"):
+        audio_pipeline.AudioPipeline().run("long.mp4", duration=600.01)
+
+
+def test_pipeline_clips_model_tail_to_media_duration(monkeypatch):
+    monkeypatch.setattr(audio_pipeline, "extract_audio", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        audio_pipeline,
+        "transcribe_audio",
+        lambda *args, **kwargs: [
+            (0.9, 1.1, 64, 0.9),
+            (1.0, 1.2, 65, 0.8),
+        ],
+    )
+
+    built = audio_pipeline.AudioPipeline().run("tail.mp4", duration=1.0)
+    notes = [
+        note
+        for bar in built["bars"]
+        for beat in bar["beats"]
+        for note in beat["notes"]
+    ]
+
+    assert built["duration"] == 1.0
+    assert len(notes) == 1
+    assert notes[0]["endTime"] == 1.0
+
+
+def test_transcription_keeps_the_full_standard_19_fret_range(monkeypatch):
+    captured = {}
+    inference = ModuleType("basic_pitch.inference")
+
+    def predict(path, **kwargs):
+        captured.update(kwargs)
+        return None, None, [
+            (0.0, 0.2, 83, 0.9, []),
+            (0.3, 0.5, 84, 0.9, []),
+        ]
+
+    inference.predict = predict
+    package = ModuleType("basic_pitch")
+    package.__path__ = []
+    monkeypatch.setitem(sys.modules, "basic_pitch", package)
+    monkeypatch.setitem(sys.modules, "basic_pitch.inference", inference)
+
+    notes = transcription.transcribe_audio("analysis.wav")
+
+    assert [event[2] for event in notes] == [83]
+    assert captured["minimum_note_length"] == 50.0
 
 
 @pytest.mark.parametrize("raw_duration", ["nan", "inf", "0", "-1"])

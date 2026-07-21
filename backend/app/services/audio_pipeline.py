@@ -4,6 +4,7 @@ End-to-end audio → Score JSON pipeline.
 """
 
 import logging
+import math
 import os
 import shutil
 import tempfile
@@ -13,7 +14,7 @@ from app.config import get_settings
 from app.services.storage import get_storage, StorageService
 from app.services.transcription import extract_audio, get_video_duration, transcribe_audio
 from app.services.tab_solver import solve_notes
-from app.services.score_builder import build_score
+from app.services.score_builder import MAX_SCORE_DURATION_SECONDS, build_score
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -48,7 +49,7 @@ class AudioPipeline:
     def run(
         self,
         video_path: str,
-        title: str = "",
+        title: str = "Untitled",
         source_video_url: str = "",
         duration: float = 0.0,
         bpm: int = 72,
@@ -81,8 +82,18 @@ class AudioPipeline:
 
             # Duration probing belongs inside the cleanup boundary: malformed
             # media must not leak a newly created pipeline directory.
+            if (
+                isinstance(duration, bool)
+                or not isinstance(duration, (int, float))
+                or not math.isfinite(duration)
+            ):
+                raise ValueError("duration must be a finite number")
             if duration <= 0:
                 duration = get_video_duration(video_path)
+            if duration > MAX_SCORE_DURATION_SECONDS:
+                raise ValueError(
+                    f"media duration exceeds the {MAX_SCORE_DURATION_SECONDS:g}-second limit"
+                )
 
             # 1. Extract audio
             audio_path = os.path.join(work_dir, "analysis.wav")
@@ -90,6 +101,20 @@ class AudioPipeline:
 
             # 2. Transcribe to note events
             note_events = transcribe_audio(audio_path)
+            # Model frames can extend a fraction beyond the media boundary.
+            # The video duration is authoritative, so trim that tail rather
+            # than extending the score and desynchronizing playback.
+            bounded_note_events = []
+            for start, end, midi, confidence in note_events:
+                bounded_end = min(end, duration)
+                if start < duration and bounded_end > start:
+                    bounded_note_events.append((start, bounded_end, midi, confidence))
+            if len(bounded_note_events) != len(note_events):
+                logger.info(
+                    "Dropped %d transcription events outside the media timeline",
+                    len(note_events) - len(bounded_note_events),
+                )
+            note_events = bounded_note_events
             logger.info("Transcribed %d notes", len(note_events))
 
             if not note_events:
@@ -173,7 +198,7 @@ class AudioPipeline:
         with tempfile.TemporaryDirectory(prefix="guitar_score_") as score_dir:
             score_path_local = os.path.join(score_dir, score_key)
             with open(score_path_local, "w", encoding="utf-8") as score_file:
-                json.dump(score, score_file, ensure_ascii=False)
+                json.dump(score, score_file, ensure_ascii=False, allow_nan=False)
 
             with open(score_path_local, "rb") as score_file:
                 storage_path = self.storage.save(
