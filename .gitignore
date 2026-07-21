@@ -26,3 +26,11 @@ Thumbs.db
 # Temporary
 *.tmp
 *.temp
+
+# Backend
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/storage/
+backend/*.db
+backend/.env

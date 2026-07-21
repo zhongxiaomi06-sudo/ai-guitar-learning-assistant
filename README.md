@@ -33,31 +33,21 @@
 
 ```
 .
-├── docs/
-│   ├── PROJECT.md          # 完整产品文档
-│   ├── PROGRESS.md         # 项目进度
-│   ├── BACKEND_START.md    # 后端起步方案
-│   └── TECHNICAL_RESEARCH.md  # 技术栈调研
-├── public/                 # 静态资源
-├── src/
-│   ├── main.js             # 执行页入口
-│   ├── home.js             # 个人主页入口
-│   ├── ui-demo.js          # 音游模式渲染与演示逻辑
-│   ├── app.js              # 应用核心调度（预留）
-│   ├── core/               # 核心逻辑模块
-│   │   ├── audio/          # 音频处理、音高检测
-│   │   ├── video/          # 视频抓取、播放、同步
-│   │   ├── score/          # 谱面模型、渲染、手型生成
-│   │   ├── matching/       # 匹配引擎、打分、反馈
-│   │   └── practice/       # 练习会话、调速、循环
-│   ├── features/           # UI 功能模块
-│   ├── shared/             # 类型、常量、工具
-│   └── assets/             # CSS、图片、字体
-├── index.html              # 执行页（跟练）
-├── home.html               # 个人主页（上传 + 我的课程）
-├── vite.config.js
-├── package.json
-└── README.md
+├── docs/                      # 产品、技术、进度文档
+├── backend/                   # FastAPI 后端（Step 1 已完成）
+│   ├── app/
+│   │   ├── main.py            # API 入口
+│   │   ├── api/               # 路由
+│   │   ├── models/            # SQLAlchemy 模型
+│   │   ├── schemas/           # Pydantic 模型
+│   │   └── services/          # 存储服务
+│   ├── docker-compose.yml     # PostgreSQL + Redis + MinIO
+│   ├── Dockerfile
+│   └── requirements.txt
+├── src/                       # 前端 Vite 源码
+├── index.html                 # 执行页（跟练）
+├── home.html                  # 个人主页
+└── vite.config.js
 ```
 
 ---
@@ -122,39 +112,43 @@
 
 ## 快速开始
 
+### 前端
+
 ```bash
-# 安装依赖
 npm install
-
-# 开发模式
-npm run dev
-
-# 构建
+npm run dev      # http://localhost:3000
 npm run build
-
-# 预览生产构建
-npm run preview
-
-# 代码检查
 npm run lint
 ```
 
-开发服务器启动后：
+### 后端
 
-- 个人主页：`http://localhost:3000/home.html`
-- 执行页：`http://localhost:3000/index.html`（含音游模式）
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate        # Windows
+pip install -r requirements.txt
+uvicorn app.main:app --reload  # http://localhost:8000
+```
+
+后端默认使用 SQLite（`./storage/app.db`）和本地文件存储，无需 Docker 即可运行。生产环境可切到 PostgreSQL + MinIO，见 `backend/docker-compose.yml`。
+
+### API 预览
+
+启动后端后访问：
+
+- 文档：`http://localhost:8000/docs`
+- 健康检查：`GET /health`
+- 课程列表：`GET /api/v1/courses`
+- 上传视频：`POST /api/v1/courses/upload` (multipart/form-data: title, video)
+- 课程视频流：`GET /api/v1/courses/{id}/video`
+- 课程谱面：`GET /api/v1/courses/{id}/score`
 
 ---
 
 ## 构建产物
 
-执行 `npm run build` 后生成 `dist/` 目录，包含：
-
-- `index.html` — 执行页
-- `home.html` — 个人主页
-- `assets/` — JS / CSS 打包文件
-
-> `index.html` 与 `home.html` 均经过 Vite 打包，输出到 `dist/` 目录。
+执行 `npm run build` 后生成 `dist/` 目录，包含 `index.html` 与 `home.html` 及打包后的 JS/CSS。
 
 ---
 
