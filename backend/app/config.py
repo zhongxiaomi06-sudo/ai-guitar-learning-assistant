@@ -22,7 +22,9 @@ class Settings(BaseSettings):
     max_score_upload_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
 
     # Comma-separated so it is convenient to configure from Docker/.env.
-    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    # Defaults include common Vite dev/preview ports to keep local frontend
+    # connectivity working out of the box.
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173"
     cors_allow_credentials: bool = False
 
     minio_endpoint: str = "localhost:9000"

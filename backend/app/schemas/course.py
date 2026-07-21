@@ -11,7 +11,7 @@ class CourseBase(BaseModel):
 
     title: str = Field(..., min_length=1, max_length=255)
     source_url: Optional[str] = None
-    duration: float = Field(default=0.0, ge=0, le=86400)
+    duration: float = Field(default=0.0, ge=0, le=600)
     bpm: int = Field(default=0, ge=0, le=400)
     time_signature: str = Field(default="4/4", pattern=r"^\d{1,2}/\d{1,2}$")
     key: str = Field(default="C", min_length=1, max_length=16)
