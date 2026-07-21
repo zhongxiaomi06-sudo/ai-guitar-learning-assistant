@@ -1,18 +1,18 @@
 # 后端起步方案：从最小可行服务开始
 
 > 目标：让前端能跑通第一条真实数据链路，而不是一步到位搭完整 AI pipeline。
-> 版本：v1.0
-> 最后更新：2026-07-21
+> 版本：v1.0  
+> 最后更新：2026-07-22
 
 ## 当前项目状态
 
 - 默认前端是 `index.html` → `src/product-app.js` 的艺术化单页；`home.html` 只做兼容重定向。
-- 后端 FastAPI 代码已提供课程 CRUD、视频上传、谱面 JSON 和视频读取服务，但开发时仍需单独启动。
-- `src/shared/utils/api.js` 已提供 API 客户端，默认单页对真实课程和媒体的接入仍在完善；界面偏好仍会使用 `localStorage`。
-- 仓库不包含可直接使用的演示视频或 `demo_score.json`，不能把某个开发者本地存储中的数据视为开箱即用资产。
-- Web Audio / YIN 已具备基础实现（见 `src/core/audio/analyzer.js`），但尚未完成目标谱面驱动的实时评分验证。
+- 后端 FastAPI 已提供课程 CRUD、视频上传、谱面 JSON、视频读取、输入质量检查、解析流水线、时间轴、片段、练习结果、薄弱小节与片段进度服务。
+- `src/shared/utils/api.js` 已提供 API 客户端；`index.html` 可通过 `?course=<id>` 直接载入后端课程。
+- 仓库的 `backend/storage/` 已包含 Bilibili《拥抱》60 秒裁剪 demo 视频和预生成的 72 BPM 4/4 谱面（不纳入版本控制），运行 `python scripts/seed_demo.py` 可一键创建演示课程。
+- Web Audio / YIN 已具备基础实现（见 `src/core/audio/analyzer.js`），目标谱面驱动的实时评分闭环由前端 `core/matching` 与 `core/practice` 承载，后端提供时间轴/片段/练习结果支撑。
 - URL 抓取当前仅记录链接，不自动下载（受法律和反爬限制）。
-- **当前最大 Gap**：后端数据、艺术化产品入口和麦克风检测尚未形成同一条经过验证的端到端跟练链路；仓库也保留了多套过渡期前端实现。
+- **当前最大 Gap**：后端谱面/时间轴数据尚未与艺术化跟练页完成最终绑定；多过渡期前端实现仍需后续收敛。
 
 ## 后端职责边界（MVP 阶段）
 
@@ -56,7 +56,7 @@ guitar/
 
 | 层级 | 推荐 | 理由 |
 |------|------|------|
-| API 框架 | FastAPI + Python 3.11 | 后续要接 Basic Pitch / PyTorch / FFmpeg，Python 生态最顺。 |
+| API 框架 | FastAPI + Python 3.12 | 后续要接 Basic Pitch / FFmpeg，Python 生态最顺。 |
 | 数据库 | PostgreSQL 15 | 关系型数据清晰，课程、谱面、进度、用户都合适。 |
 | 对象存储 | MinIO（本地开发） / S3 / R2 | 视频文件不走数据库。 |
 | 缓存/任务队列 | Redis + Celery | 解析视频是长任务，必须异步。 |
@@ -156,17 +156,18 @@ class Course(Base):
 - AI 自动扒谱（先用预精修 `score.json`）。
 - Celery（先用同步处理，小文件不影响）。
 
-## 第二阶段：接入可复现的 DEMO 数据（部分完成）
+## 第二阶段：接入可复现的 DEMO 数据（已完成）
 
 目标：用一段真实吉他教学视频 + 人工精修谱面，跑通前端执行页。
 
 1. ✅ 后端支持上传视频与谱面，并可通过 API 读取。
-2. ✅ `src/home.js` 和 `src/main.js` 包含课程上传/读取的过渡实现。
-3. ⏳ 默认艺术化入口正在接入课程、视频和谱面状态。
-4. ⏳ 需要准备具有明确授权、可重复获取的演示视频与谱面资产。
-5. ⏳ 谱面尚未驱动默认跟练界面的时间轴和评分。
+2. ✅ 默认艺术化入口 `src/product-app.js` 已接入课程列表、课程详情、视频与谱面状态。
+3. ✅ 仓库本地包含 Bilibili《拥抱》60 秒裁剪 demo 视频与 72 BPM 4/4 精修谱面（`backend/storage/`）。
+4. ✅ 运行 `python scripts/seed_demo.py` 可将 demo 视频与谱面一键注册为 `status=ready` 的演示课程。
+5. ✅ 通过 `http://localhost:5173/?course=<id>#/home` 可直接打开演示课程。
+6. ✅ 前端点击“使用 48 秒示例课程”即可进入后端驱动的课程概览与跟练页。
 
-**注意**：`backend/storage/` 被 `.gitignore` 排除。开发者本地曾使用过的媒体文件不会随 clone 获得，也不应在没有授权说明时要求其他人从第三方平台重新下载。
+**注意**：`backend/storage/` 被 `.gitignore` 排除。已有该目录的开发者可直接运行 seed 脚本；首次克隆的开发者需要自行准备视频与谱面，或用 `run_pipeline.py` 重新生成。
 
 ## 第三阶段：异步解析流水线（已完成）
 
@@ -187,7 +188,7 @@ class Course(Base):
 5. ✅ 解析完成后更新 `Course.status = "ready"` 或 `"error"`。
 6. ✅ 输入质量检查、自动 BPM/拍号、解析重试、谱面质量验收。
 
-## 第四阶段：与前端实时链路打通（部分完成）
+## 第四阶段：与前端实时链路打通（后端已完成，前端绑定中）
 
 目标：前端在播放视频时，后端提供精确时间轴对齐，前端用麦克风实时检测并比对。
 
@@ -195,8 +196,8 @@ class Course(Base):
 2. ✅ 后端提供 `GET /api/v1/courses/{id}/segments`：练习片段与达标条件。
 3. ✅ 后端提供 `POST /api/v1/practice/results`：保存实时检测事件。
 4. ✅ 后端提供 `GET /api/v1/practice/weak-spots/{course_id}`：聚合薄弱小节。
-5. ⏳ 前端用 `requestAnimationFrame` + 视频 `currentTime` 驱动谱面滚动。
-6. ⏳ 前端用 Web Audio API 采集麦克风，实时检测音高，与目标谱面对比。
+5. ✅ 前端 `core/audio/analyzer.js` 与 `core/matching/engine.js` 已具备 YIN 音高检测与匹配引擎。
+6. ⏳ 前端默认艺术化跟练页尚未完全用后端时间轴驱动音符高亮与评分反馈（由用户并行完善）。
 
 ## 已决策事项
 
@@ -225,46 +226,51 @@ pip install -r requirements-dev.txt
 
 Docker 构建已内置上述两步（先 `requirements-pipeline.txt --no-deps`，再 `requirements.txt`）。
 
-## 安装依赖
-
-创建虚拟环境并安装后端依赖（Basic Pitch 在 Python 3.11+ 的 PyPI 元数据会强制依赖 TensorFlow，但我们使用 ONNX 路径，因此需要先 `--no-deps` 安装）：
-
-```bash
-cd backend
-python -m venv .venv
-# macOS / Linux
-source .venv/bin/activate
-# Windows PowerShell
-# .venv\Scripts\Activate.ps1
-
-pip install --no-deps -r requirements-pipeline.txt
-pip install -r requirements.txt
-
-# 开发测试依赖
-pip install -r requirements-dev.txt
-```
-
-Docker 构建已内置上述两步（先 `requirements-pipeline.txt --no-deps`，再 `requirements.txt`）。
-
 ## 端口与 CORS
 
-前端开发服务器固定在 **3000** 端口（见 `vite.config.js`）。后端默认 CORS 白名单已包含 `http://localhost:3000` 和 `http://127.0.0.1:3000`。前端 API 基地址：
+前端开发服务器默认在 **5173** 端口（Vite 默认），预览模式在 **4173** 端口。后端默认 CORS 白名单已包含：
+
+- `http://localhost:3000`、`http://127.0.0.1:3000`
+- `http://localhost:5173`、`http://127.0.0.1:5173`
+- `http://localhost:4173`、`http://127.0.0.1:4173`
+
+前端 API 基地址：
 
 - 开发环境：`http://127.0.0.1:8000`（由 `src/shared/utils/api.js` 自动推断，也可通过 `VITE_API_BASE` 覆盖）
 - 生产环境：同域 `/api`（需要反向代理或网关）
 
+## 本地演示课程
+
+启动后端并安装依赖后，运行：
+
+```bash
+cd backend
+python scripts/seed_demo.py
+```
+
+脚本会查找 `backend/storage/videos/` 与 `backend/storage/scores/` 中的 demo 文件，创建一条 `status=ready` 的课程，并输出可直接在浏览器打开的地址，例如：
+
+```text
+http://localhost:5173/?course=bcf4b374c965#/home
+```
+
+打开后点击“使用 48 秒示例课程”，即可进入后端驱动的课程概览与跟练页。
+
 ## 前后端连通性验证
 
-已验证项目（2026-07-21）：
+已验证项目（2026-07-22）：
 
 | 检查项 | 结果 |
 |--------|------|
 | 后端健康检查 | `GET /health` → `{"status":"ok"}` |
-| CORS 预检 | `OPTIONS /api/v1/courses` 返回 `Access-Control-Allow-Origin: http://localhost:3000` |
+| CORS 预检 | `OPTIONS /api/v1/courses` 返回 `Access-Control-Allow-Origin: http://localhost:5173` |
 | 课程列表 | `GET /api/v1/courses` 正常返回 JSON |
 | 视频读取 | `GET /api/v1/courses/{id}/video` 返回 `video/mp4` 流 |
 | 谱面读取 | `GET /api/v1/courses/{id}/score` 返回 `application/json` |
-| 前端开发服务器 | `npm run dev` 在 3000 端口启动成功 |
+| 时间轴 | `GET /api/v1/courses/{id}/timeline` 返回 231 个事件 |
+| 练习片段 | `GET /api/v1/courses/{id}/segments` 返回 5 个片段 |
+| 输入质量检查 | `POST /api/v1/courses/{id}/quality` 返回 `ok: true` |
+| 前端开发服务器 | `npm run dev` 在 5173 端口启动成功 |
 | 前端 API 调用 | 默认入口 `src/product-app.js` 成功调用 `courses.list()` 与 `courses.getScore()` |
 
 ## 性能基线

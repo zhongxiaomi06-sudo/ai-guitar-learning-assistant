@@ -30,7 +30,7 @@
 | 前端构建 | Vite 5 |
 | 前端语言 | 原生 JavaScript（ES Modules） |
 | 前端样式 | 原生 CSS + CSS 变量 |
-| 后端框架 | FastAPI + Python 3.11 |
+| 后端框架 | FastAPI + Python 3.12 |
 | 后端数据库 | SQLite（本地开发）/ PostgreSQL（Docker） |
 | 后端存储 | 本地文件系统 / MinIO |
 | 音频处理 | FFmpeg + Basic Pitch（后端转谱）/ Web Audio API（前端 YIN） |
@@ -123,7 +123,7 @@
 
 ```bash
 npm install
-npm run dev      # http://localhost:3000
+npm run dev      # http://localhost:5173
 npm run build
 npm run lint
 ```
@@ -135,11 +135,29 @@ cd backend
 python -m venv .venv
 source .venv/bin/activate      # macOS / Linux
 # .venv\Scripts\Activate.ps1  # Windows PowerShell
+pip install --no-deps -r requirements-pipeline.txt  # Basic Pitch，绕过 TensorFlow
 pip install -r requirements.txt
 uvicorn app.main:app --reload  # http://localhost:8000
 ```
 
 后端默认使用 SQLite（`./storage/app.db`）和本地文件存储，无需 Docker 即可运行。生产环境可切到 PostgreSQL + MinIO，见 `backend/docker-compose.yml`。
+
+### 本地演示课程
+
+仓库已包含 Bilibili《拥抱》60 秒裁剪 demo 视频和预生成的 72 BPM 4/4 谱面（位于 `backend/storage/`，不纳入版本控制）。启动后端后，运行：
+
+```bash
+cd backend
+python scripts/seed_demo.py
+```
+
+脚本会创建一个 `status=ready` 的演示课程，并输出可直接在浏览器打开的地址，例如：
+
+```text
+http://localhost:5173/?course=bcf4b374c965#/home
+```
+
+打开后点击“使用 48 秒示例课程”即可进入真实后端驱动的课程概览与跟练页面。
 
 ### API 预览
 
@@ -157,8 +175,15 @@ uvicorn app.main:app --reload  # http://localhost:8000
 - 课程视频流：`GET /api/v1/courses/{id}/video`
 - 课程谱面：`GET /api/v1/courses/{id}/score`
 - 上传谱面：`POST /api/v1/courses/{id}/score` (multipart/form-data: score)
+- 输入质量检查：`POST /api/v1/courses/{id}/quality`
+- 统一时间轴：`GET /api/v1/courses/{id}/timeline`
+- 练习片段：`GET /api/v1/courses/{id}/segments`
+- 片段进度：`POST /api/v1/courses/{id}/segments/{segment_id}/progress`
+- 练习结果：`POST /api/v1/practice/results` 与 `GET /api/v1/practice/results`
+- 练习汇总：`GET /api/v1/practice/summary/{course_id}`
+- 薄弱小节：`GET /api/v1/practice/weak-spots/{course_id}`
 
-> 演示课程（Bilibili《拥抱》60 秒裁剪版）需在后端本地生成，媒体文件不纳入版本控制。详见 `docs/BACKEND_START.md` 第二阶段。
+> 演示课程（Bilibili《拥抱》60 秒裁剪版）可通过 `python scripts/seed_demo.py` 直接入库，媒体文件不纳入版本控制。
 
 ---
 
