@@ -1,7 +1,11 @@
 /**
  * ui-demo.js
- * 与 rhythm-demo.html 一致的执行页演示 UI：右→左音游 + 音高仪表 + 可折叠设置
+ * 执行页音游模式演示 UI：右→左音游 + 麦克风音高检测 + 可折叠设置
+ * 判定基于麦克风输入：检测弹奏音高 → 映射到吉他琴弦 → 触发对应车道判定。
  */
+
+import { AudioAnalyzer } from './core/audio/analyzer.js';
+import { midiToStringLane } from './shared/utils/index.js';
 
 const LANE_COLORS = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
 const KEY_MAP = {
@@ -25,7 +29,101 @@ let gameState = {
   offset: 0,
   autoPlay: false,
   laneFlash: [0, 0, 0, 0, 0, 0],
+  keyboardDebug: false, // 键盘调试开关（默认关闭，符合项目核心）
 };
+
+let audioState = {
+  audioContext: null,
+  analyzer: null,
+  micStream: null,
+  listening: false,
+  prevRms: 0,
+  lastHitTime: 0,
+  cooldownMs: 100,
+  status: 'idle', // idle / requesting / active / error
+  error: '',
+};
+
+/**
+ * 初始化麦克风音频输入
+ */
+async function initAudioInput() {
+  if (audioState.listening || audioState.status === 'requesting') return;
+
+  audioState.status = 'requesting';
+  updateAudioStatus();
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    audioState.micStream = stream;
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    audioState.audioContext = new AudioContext();
+    audioState.analyzer = new AudioAnalyzer(audioState.audioContext);
+    const source = audioState.audioContext.createMediaStreamSource(stream);
+    audioState.analyzer.connect(source);
+
+    audioState.listening = true;
+    audioState.status = 'active';
+    audioState.error = '';
+  } catch (err) {
+    audioState.status = 'error';
+    audioState.error = err.name === 'NotAllowedError' ? '麦克风权限被拒绝' : err.message;
+    console.error('[AudioInput] init failed', err);
+  }
+
+  updateAudioStatus();
+}
+
+/**
+ * 更新麦克风状态 UI
+ */
+function updateAudioStatus() {
+  const hitFeedback = document.getElementById('hitFeedback');
+  const feedbackText = document.getElementById('feedbackText');
+  const statusMap = {
+    idle: '等待开始',
+    requesting: '正在请求麦克风...',
+    active: '麦克风已启用：请弹奏吉他',
+    error: '麦克风错误：' + audioState.error,
+  };
+  const text = statusMap[audioState.status] || statusMap.idle;
+  if (hitFeedback) hitFeedback.textContent = text;
+  if (feedbackText) {
+    feedbackText.setAttribute('data-type', audioState.status === 'error' ? 'miss' : 'pending');
+    feedbackText.textContent = text;
+  }
+}
+
+/**
+ * 基于音频输入触发击打
+ */
+function updateAudioHits() {
+  if (!audioState.listening || !audioState.analyzer) return;
+
+  const detection = audioState.analyzer.detectOnset(0.02, audioState.prevRms);
+  audioState.prevRms = detection.rms;
+
+  const pitch = audioState.analyzer.detectPitch();
+  const lane = pitch.midi > 0 ? midiToStringLane(pitch.midi) : -1;
+
+  // 仅当检测到 onset + 有效音高 + 不在冷却期才触发
+  const now = performance.now();
+  if (!detection.onset || lane < 0 || now - audioState.lastHitTime < audioState.cooldownMs) {
+    return;
+  }
+
+  audioState.lastHitTime = now;
+  hitLane(lane);
+
+  // 同步音高仪表
+  const gauge = document.getElementById('gaugeCurrent');
+  if (gauge && pitch.midi > 0) {
+    const clamped = Math.min(Math.max(pitch.midi, 40), 76);
+    const top = 30 + ((76 - clamped) / 36) * 40;
+    gauge.style.top = `${top}%`;
+  }
+}
 
 /**
  * 渲染流动六线谱
@@ -396,19 +494,9 @@ function gameLoop() {
 
   updateGame(dt);
   drawGame();
-  updatePitchGauge();
+  updateAudioHits();
 
   requestAnimationFrame(gameLoop);
-}
-
-/**
- * 更新音高仪表
- */
-function updatePitchGauge() {
-  const gauge = document.getElementById('gaugeCurrent');
-  if (!gauge) return;
-  const top = 30 + Math.random() * 40;
-  gauge.style.top = `${top}%`;
 }
 
 /**
@@ -421,6 +509,10 @@ function toggleGame() {
     gameState.playing = true;
     gameState.lastFrame = performance.now();
     gameState.lastSpawn = performance.now();
+    // 首次启动时请求麦克风
+    if (!audioState.listening) {
+      initAudioInput();
+    }
   }
 }
 
@@ -564,7 +656,8 @@ function initControls() {
       }
       if (nextHint) nextHint.textContent = '准备：第 3 弦 2 品';
       if (scoreBpm) scoreBpm.textContent = '120 BPM';
-      // 开始自动演示
+      // 启动麦克风和游戏
+      if (!audioState.listening) initAudioInput();
       if (!gameState.playing) toggleGame();
     });
   }
@@ -572,23 +665,6 @@ function initControls() {
   if (startBtn) startBtn.addEventListener('click', toggleGame);
   if (pauseBtn) pauseBtn.addEventListener('click', () => { gameState.playing = false; });
   if (resetBtn) resetBtn.addEventListener('click', resetGame);
-
-  // 键盘控制
-  window.addEventListener('keydown', (e) => {
-    const lane = KEY_MAP[e.key];
-    if (lane !== undefined) hitLane(lane);
-  });
-
-  // 点击 canvas
-  const canvas = document.getElementById('matchGameCanvas');
-  if (canvas) {
-    canvas.addEventListener('pointerdown', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      const y = e.clientY - rect.top;
-      const lane = Math.floor(y / (rect.height / 6));
-      if (lane >= 0 && lane < 6) hitLane(lane);
-    });
-  }
 
   // 快速操作
   const slowBtn = document.getElementById('slowBtn');
@@ -601,6 +677,46 @@ function initControls() {
     });
   }
 }
+
+/**
+ * 键盘调试：仅在开启后生效，默认关闭
+ */
+function initKeyboardDebug() {
+  window.addEventListener('keydown', (e) => {
+    if (!gameState.keyboardDebug) return;
+    const lane = KEY_MAP[e.key];
+    if (lane !== undefined) hitLane(lane);
+  });
+
+  const canvas = document.getElementById('matchGameCanvas');
+  if (canvas) {
+    canvas.addEventListener('pointerdown', (e) => {
+      if (!gameState.keyboardDebug) return;
+      const rect = canvas.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const lane = Math.floor(y / (rect.height / 6));
+      if (lane >= 0 && lane < 6) hitLane(lane);
+    });
+  }
+}
+
+/**
+ * 初始化键盘调试开关
+ */
+function initKeyboardDebugToggle() {
+  const toggle = document.getElementById('keyboardDebugToggle');
+  if (!toggle) return;
+
+  toggle.addEventListener('click', () => {
+    const active = toggle.getAttribute('data-active') === 'true';
+    toggle.setAttribute('data-active', String(!active));
+    toggle.classList.toggle('active', !active);
+    const text = toggle.querySelector('.toggle-text');
+    if (text) text.textContent = !active ? '开' : '关';
+    gameState.keyboardDebug = !active;
+  });
+}
+
 
 /**
  * 窗口变化时重绘
@@ -634,6 +750,8 @@ export function initDemoUI() {
   initDifficultyChips();
   initAutoSlowToggle();
   initOffsetControl();
+  initKeyboardDebug();
+  initKeyboardDebugToggle();
   initControls();
   initResize();
 
@@ -648,6 +766,7 @@ export function initDemoUI() {
     ctx.scale(dpr, dpr);
   }
 
+  updateAudioStatus();
   requestAnimationFrame(gameLoop);
 }
 

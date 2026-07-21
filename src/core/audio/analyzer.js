@@ -5,6 +5,23 @@
 
 import { freqToMidi } from '../../shared/utils/index.js';
 
+const MIN_GUITAR_FREQUENCY = 70;
+const MAX_GUITAR_FREQUENCY = 1000;
+const YIN_THRESHOLD = 0.12;
+const SILENCE_RMS = 0.005;
+
+/**
+ * YIN 需要至少容纳两个最低音周期。AnalyserNode 只接受 2 的幂次 fftSize。
+ * @param {number} sampleRate
+ * @returns {number}
+ */
+function chooseFftSize(sampleRate) {
+  const minimumSize = Math.ceil((sampleRate / MIN_GUITAR_FREQUENCY) * 2);
+  let fftSize = 2048;
+  while (fftSize < minimumSize && fftSize < 32768) fftSize *= 2;
+  return Math.min(fftSize, 32768);
+}
+
 /**
  * 音频分析器
  */
@@ -15,7 +32,7 @@ export class AudioAnalyzer {
   constructor(audioContext) {
     this.audioContext = audioContext;
     this.analyser = audioContext.createAnalyser();
-    this.analyser.fftSize = 2048;
+    this.analyser.fftSize = chooseFftSize(audioContext.sampleRate);
     this.analyser.smoothingTimeConstant = 0.8;
     this.buffer = new Float32Array(this.analyser.fftSize);
     this.sampleRate = audioContext.sampleRate;
@@ -49,48 +66,157 @@ export class AudioAnalyzer {
   }
 
   /**
-   * 检测当前主音高（YIN 简化版占位）
+   * 检测当前主音高（YIN 算法简化实现）
    * @returns {{ frequency: number, midi: number, confidence: number }}
    */
   detectPitch() {
     this.analyser.getFloatTimeDomainData(this.buffer);
-    // TODO: 接入 YIN / autocorrelation / CREPE 算法
-    const frequency = this.placeholderPitchDetect();
-    const midi = freqToMidi(frequency);
-    return { frequency, midi, confidence: 0 };
+    const rms = this.computeRMS(this.buffer);
+    return this.detectPitchFromBuffer(this.buffer, rms);
   }
 
   /**
-   * 占位音高检测
+   * 对同一帧时域数据同时计算音高、Onset 和 RMS。
+   * 避免一次检测中多次读取 AnalyserNode 导致数据不同步。
+   * @param {number} onsetThreshold
+   * @param {number} prevRms
+   * @returns {{
+   *   pitch: { frequency: number, midi: number, confidence: number },
+   *   onset: boolean,
+   *   rms: number
+   * }}
+   */
+  analyzeFrame(onsetThreshold = 0.02, prevRms = 0) {
+    this.analyser.getFloatTimeDomainData(this.buffer);
+    const rms = this.computeRMS(this.buffer);
+    return {
+      pitch: this.detectPitchFromBuffer(this.buffer, rms),
+      onset: rms > onsetThreshold && rms > prevRms * 1.5,
+      rms,
+    };
+  }
+
+  /**
+   * @param {Float32Array} buffer
+   * @param {number} rms
+   * @returns {{ frequency: number, midi: number, confidence: number }}
+   */
+  detectPitchFromBuffer(buffer, rms = this.computeRMS(buffer)) {
+    if (!Number.isFinite(rms) || rms < SILENCE_RMS) {
+      return { frequency: 0, midi: 0, confidence: 0 };
+    }
+
+    const { frequency, confidence } = this.yinPitchDetect(buffer, this.sampleRate);
+    const validFrequency = Number.isFinite(frequency) ? frequency : 0;
+    const midi = validFrequency > 0 ? freqToMidi(validFrequency) : 0;
+    return { frequency: validFrequency, midi, confidence };
+  }
+
+  /**
+   * 计算 RMS
+   * @param {Float32Array} buffer
    * @returns {number}
    */
-  placeholderPitchDetect() {
-    // 简单能量重心，后续替换为真实算法
+  computeRMS(buffer) {
     let sum = 0;
-    let count = 0;
-    for (let i = 0; i < this.buffer.length; i++) {
-      sum += Math.abs(this.buffer[i]);
-      count++;
+    for (let i = 0; i < buffer.length; i++) {
+      sum += buffer[i] * buffer[i];
     }
-    const energy = sum / count;
-    if (energy < 0.01) return 0;
-    return 220 + energy * 100;
+    return Math.sqrt(sum / buffer.length);
   }
 
   /**
-   * 检测 Onset（能量差分法）
-   * @param {number} threshold
-   * @returns {boolean}
+   * YIN 音高检测
+   * @param {Float32Array} buffer
+   * @param {number} sampleRate
+   * @returns {{ frequency: number, confidence: number }}
    */
-  detectOnset(threshold = 0.1) {
-    const data = this.getTimeData();
-    let energy = 0;
-    for (let i = 0; i < data.length; i++) {
-      energy += data[i] * data[i];
+  yinPitchDetect(buffer, sampleRate) {
+    if (!buffer?.length || !Number.isFinite(sampleRate) || sampleRate <= 0) {
+      return { frequency: 0, confidence: 0 };
     }
-    const rms = Math.sqrt(energy / data.length);
-    // TODO: 使用更鲁棒的 Onset 检测算法
-    return rms > threshold;
+
+    // 搜索区间覆盖吉他基频，并为差分函数保留等长比较窗。
+    const tauMax = Math.min(
+      Math.floor(sampleRate / MIN_GUITAR_FREQUENCY),
+      Math.floor(buffer.length / 2),
+    );
+    const tauMin = Math.max(Math.floor(sampleRate / MAX_GUITAR_FREQUENCY), 2);
+
+    if (tauMax <= tauMin) return { frequency: 0, confidence: 0 };
+
+    // tauMax 也是有效候选，因此多保留一个元素防止边界插值越界。
+    const diff = new Float64Array(tauMax + 1);
+    const cmnd = new Float64Array(tauMax + 1);
+    const comparisonLength = tauMax;
+
+    // Step 1: 差分函数
+    // 累积均值必须包含 1..tauMax 的全部差分。从 tauMin 才开始
+    // 计算会使高频端的 CMND 失真，并将 1000 Hz 误判为 500 Hz。
+    for (let tau = 1; tau <= tauMax; tau++) {
+      let sum = 0;
+      for (let j = 0; j < comparisonLength; j++) {
+        const d = buffer[j] - buffer[j + tau];
+        sum += d * d;
+      }
+      diff[tau] = sum;
+    }
+
+    // Step 2: 累积均值归一化差分
+    cmnd[0] = 1;
+    let runningSum = 0;
+    for (let tau = 1; tau <= tauMax; tau++) {
+      runningSum += diff[tau];
+      cmnd[tau] = runningSum > Number.EPSILON ? (diff[tau] * tau) / runningSum : 1;
+    }
+
+    // Step 3: 绝对阈值搜索
+    let selectedTau = 0;
+    for (let tau = tauMin; tau <= tauMax; tau++) {
+      if (cmnd[tau] < YIN_THRESHOLD) {
+        selectedTau = tau;
+        while (selectedTau < tauMax && cmnd[selectedTau + 1] < cmnd[selectedTau]) {
+          selectedTau++;
+        }
+        break;
+      }
+    }
+
+    if (selectedTau === 0) return { frequency: 0, confidence: 0 };
+
+    // Step 4: 抛物线插值
+    let betterTau = selectedTau;
+    if (selectedTau > 1 && selectedTau < tauMax) {
+      const y0 = cmnd[selectedTau - 1];
+      const y1 = cmnd[selectedTau];
+      const y2 = cmnd[selectedTau + 1];
+      const denominator = 2 * (2 * y1 - y2 - y0);
+      if (Number.isFinite(denominator) && Math.abs(denominator) > Number.EPSILON) {
+        const candidate = selectedTau + (y2 - y0) / denominator;
+        if (Number.isFinite(candidate) && Math.abs(candidate - selectedTau) <= 1) {
+          betterTau = candidate;
+        }
+      }
+    }
+
+    const frequency = sampleRate / betterTau;
+    const inRange = Number.isFinite(frequency)
+      && frequency >= MIN_GUITAR_FREQUENCY * 0.98
+      && frequency <= MAX_GUITAR_FREQUENCY * 1.02;
+    const confidence = Math.max(0, Math.min(1, 1 - cmnd[selectedTau]));
+    return { frequency: inRange ? frequency : 0, confidence: inRange ? confidence : 0 };
+  }
+
+  /**
+   * 检测 Onset（能量阈值 + 上升沿）
+   * @param {number} threshold
+   * @param {number} prevRms
+   * @returns {{ onset: boolean, rms: number }}
+   */
+  detectOnset(threshold = 0.02, prevRms = 0) {
+    const rms = this.getRMS();
+    const onset = rms > threshold && rms > prevRms * 1.5;
+    return { onset, rms };
   }
 
   /**

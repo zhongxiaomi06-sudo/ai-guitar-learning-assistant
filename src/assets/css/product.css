@@ -2919,6 +2919,33 @@ a:focus-visible {
   display: none;
 }
 
+.library-empty {
+  grid-column: 1 / -1;
+  display: grid;
+  min-height: 260px;
+  place-content: center;
+  gap: 10px;
+  padding: 42px;
+  text-align: center;
+}
+
+.library-empty > span {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: .16em;
+}
+
+.library-empty > strong {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 3vw, 38px);
+  font-weight: 400;
+}
+
+.library-empty > p {
+  color: var(--color-muted);
+}
+
 .library-art {
   position: relative;
   min-height: 220px;

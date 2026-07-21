@@ -3,6 +3,10 @@
  * 串联上传、解析、课程概览、同步跟练、专项纠错与结果页。
  */
 
+import { GuitarDetector } from './core/audio/detector.js';
+import { midiToNoteName } from './shared/utils/index.js';
+import { courses } from './shared/utils/api.js';
+
 const ROUTES = new Set(['home', 'analysis', 'overview', 'player', 'focus', 'results', 'library']);
 const MAX_FILE_SIZE = 1024 * 1024 * 1024;
 const DEMO_DURATION = 48;
@@ -19,17 +23,39 @@ const ANALYSIS_RESULTS = [
   { title: '课程已准备就绪', detail: '已生成 4 个可独立练习的片段', step: '4 个练习片段' },
 ];
 
+const uploadJobs = new WeakMap();
+
 const state = {
   view: 'home',
   file: null,
+  videoValidationId: 0,
+  videoValidationPending: false,
+  videoValidated: false,
   videoUrl: null,
+  remoteVideoUrl: null,
+  remoteCourse: null,
+  score: null,
+  defaultTabEvents: [],
+  backendAvailable: null,
+  backendCourses: [],
+  courseLoadId: 0,
+  coursePollTimer: null,
   courseTitle: '清晨指弹练习',
   duration: DEMO_DURATION,
+  mediaDuration: null,
+  bpm: 92,
+  timeSignature: '4/4',
   analysisTimer: null,
   analysisIndex: -1,
   analysisComplete: false,
   micResolved: false,
   micAllowed: false,
+  micStream: null,
+  micContext: null,
+  micDetector: null,
+  micLastSampleAt: 0,
+  lastDetection: null,
+  micRequestId: 0,
   pendingView: null,
   playing: false,
   playerTime: 0,
@@ -108,7 +134,15 @@ function activateView(view) {
   };
   document.title = `${titles[view]} · 弦间`;
 
-  if (view === 'analysis' && state.analysisIndex < 0 && !state.analysisComplete) {
+  $$('video').forEach((video) => video.pause());
+  if (view !== 'analysis') {
+    window.clearInterval(state.analysisTimer);
+    state.analysisTimer = null;
+    clearCoursePolling();
+  } else if (state.remoteCourse && state.remoteCourse.status !== 'ready') {
+    renderRemoteAnalysisStatus(state.remoteCourse);
+    scheduleCoursePolling();
+  } else if (!state.analysisComplete && !state.analysisTimer) {
     window.setTimeout(beginAnalysis, 120);
   }
   if (view !== 'player') pausePlayer();
@@ -157,18 +191,39 @@ function validateVideo(file) {
 }
 
 function readVideoDuration(url) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const probe = document.createElement('video');
+    const timeout = window.setTimeout(() => done(null), 10_000);
     const done = (value) => {
+      window.clearTimeout(timeout);
+      probe.onloadedmetadata = null;
+      probe.onerror = null;
       probe.removeAttribute('src');
       probe.load();
-      resolve(value);
+      if (Number.isFinite(value) && value > 0) resolve(value);
+      else reject(new Error('Video metadata unavailable'));
     };
     probe.preload = 'metadata';
-    probe.onloadedmetadata = () => done(Number.isFinite(probe.duration) ? probe.duration : DEMO_DURATION);
-    probe.onerror = () => done(DEMO_DURATION);
+    probe.onloadedmetadata = () => done(probe.duration);
+    probe.onerror = () => done(null);
     probe.src = url;
   });
+}
+
+function updateStartAnalysisButton() {
+  const button = $('[data-action="start-analysis"]');
+  if (!button) return;
+  const disabled = state.videoValidationPending || (Boolean(state.file) && !state.videoValidated);
+  button.disabled = disabled;
+  button.setAttribute('aria-busy', String(state.videoValidationPending));
+}
+
+function resetPlaybackState() {
+  state.playerTime = 0;
+  state.loopEnabled = false;
+  state.lastDetection = null;
+  $('[data-seek-track]')?.classList.remove('is-looping');
+  pausePlayer();
 }
 
 async function selectVideo(file) {
@@ -181,8 +236,25 @@ async function selectVideo(file) {
   if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
   state.file = file;
   state.videoUrl = URL.createObjectURL(file);
+  state.remoteVideoUrl = null;
+  state.remoteCourse = null;
+  state.score = null;
+  state.courseLoadId += 1;
+  clearCoursePolling();
+  const validationId = ++state.videoValidationId;
+  state.videoValidationPending = true;
+  state.videoValidated = false;
+  updateStartAnalysisButton();
+  resetPlaybackState();
   state.courseTitle = file.name.replace(/\.[^.]+$/, '') || '未命名吉他课程';
   state.duration = DEMO_DURATION;
+  state.mediaDuration = null;
+  state.bpm = 92;
+  state.timeSignature = '4/4';
+  restoreDefaultScoreEvents();
+  const pageUrl = new URL(window.location.href);
+  pageUrl.searchParams.delete('course');
+  window.history.replaceState({}, '', pageUrl);
 
   $('[data-dropzone]').hidden = true;
   $('[data-selected-file]').hidden = false;
@@ -191,31 +263,61 @@ async function selectVideo(file) {
   updateCourseCopy();
   setVideoSources();
 
-  const duration = await readVideoDuration(state.videoUrl);
-  if (state.file !== file) return;
-  if (duration > 600) {
-    showToast('视频超过 10 分钟，请截取需要练习的片段后重试。', 'error');
-    resetVideoSelection();
-    return;
+  try {
+    const duration = await readVideoDuration(state.videoUrl);
+    if (state.file !== file || validationId !== state.videoValidationId) return;
+    if (duration > 600) {
+      showToast('视频超过 10 分钟，请截取需要练习的片段后重试。', 'error');
+      resetVideoSelection();
+      return;
+    }
+    state.duration = duration;
+    state.mediaDuration = duration;
+    state.videoValidated = true;
+    $('[data-file-meta]').textContent = `${formatTime(duration)} · ${formatBytes(file.size)} · 质量检查通过`;
+    updateCourseCopy();
+    showToast(duration < 30
+      ? '视频少于 30 秒，仍可解析，建议使用更完整的练习片段。'
+      : '视频质量检查完成，可以开始解析。');
+  } catch {
+    if (state.file !== file || validationId !== state.videoValidationId) return;
+    $('[data-file-meta]').textContent = `${formatBytes(file.size)} · 无法读取视频时长`;
+    showToast('无法读取这段视频的时长，请重新导出 MP4 或 MOV 后再试。', 'error');
+  } finally {
+    if (state.file === file && validationId === state.videoValidationId) {
+      state.videoValidationPending = false;
+      updateStartAnalysisButton();
+    }
   }
-  state.duration = duration;
-  $('[data-file-meta]').textContent = `${formatTime(duration)} · ${formatBytes(file.size)} · 质量检查通过`;
-  updateCourseCopy();
-  showToast(duration < 30
-    ? '视频少于 30 秒，仍可解析，建议使用更完整的练习片段。'
-    : '视频质量检查完成，可以开始解析。');
 }
 
 function resetVideoSelection() {
   if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
   state.file = null;
+  state.videoValidationId += 1;
+  state.videoValidationPending = false;
+  state.videoValidated = false;
   state.videoUrl = null;
+  state.remoteVideoUrl = null;
+  state.remoteCourse = null;
+  state.score = null;
+  state.courseLoadId += 1;
+  clearCoursePolling();
   state.courseTitle = '清晨指弹练习';
   state.duration = DEMO_DURATION;
+  state.mediaDuration = null;
+  resetPlaybackState();
+  state.bpm = 92;
+  state.timeSignature = '4/4';
+  restoreDefaultScoreEvents();
+  const url = new URL(window.location.href);
+  url.searchParams.delete('course');
+  window.history.replaceState({}, '', url);
   $('[data-dropzone]').hidden = false;
   $('[data-selected-file]').hidden = true;
   const input = $('#videoInput');
   if (input) input.value = '';
+  updateStartAnalysisButton();
   setVideoSources();
   updateCourseCopy();
 }
@@ -227,10 +329,22 @@ function updateCourseCopy() {
   $$('[data-course-duration]').forEach((element) => {
     element.textContent = formatTime(state.duration);
   });
+  $$('[data-player-duration]').forEach((element) => {
+    element.textContent = formatTime(state.duration);
+  });
+  $$('[data-course-bpm]').forEach((element) => {
+    element.textContent = String(state.bpm || 92);
+  });
+  $$('[data-time-signature]').forEach((element) => {
+    element.textContent = state.timeSignature || '4/4';
+  });
+  const seekTrack = $('[data-seek-track]');
+  seekTrack?.setAttribute('aria-valuemax', String(Math.max(1, state.duration)));
   savePreferences();
 }
 
 function setVideoSources() {
+  const mediaSource = state.videoUrl || state.remoteVideoUrl;
   const mappings = [
     ['analysisVideo', '.media-stage'],
     ['overviewVideo', '.overview-art'],
@@ -242,8 +356,8 @@ function setVideoSources() {
     const parent = $(parentSelector);
     const fallback = parent?.querySelector('[data-video-fallback]');
     if (!video) return;
-    if (state.videoUrl) {
-      video.src = state.videoUrl;
+    if (mediaSource) {
+      video.src = mediaSource;
       video.hidden = false;
       video.load();
       if (fallback) fallback.hidden = true;
@@ -257,7 +371,324 @@ function setVideoSources() {
   });
 }
 
-function prepareDemo() {
+function normalizeTimeSignature(value) {
+  if (Array.isArray(value) && value.length === 2) return `${value[0]}/${value[1]}`;
+  return typeof value === 'string' && /^\d+\/\d+$/.test(value) ? value : '4/4';
+}
+
+function scoreEvents(score) {
+  const events = [];
+  const addNotes = (notes, fallbackTime = 0) => {
+    if (!Array.isArray(notes)) return;
+    notes.forEach((note) => {
+      const compound = Array.isArray(note?.notes) && note.notes.length ? note.notes : [note];
+      compound.forEach((position) => {
+        const startTime = Number(note?.startTime ?? note?.audioStartTime ?? position?.startTime ?? fallbackTime);
+        const stringNumber = Number(position?.string ?? note?.string);
+        const fret = Number(position?.fret ?? note?.fret);
+        if (!Number.isFinite(startTime) || startTime < 0 || !Number.isInteger(stringNumber) || stringNumber < 1 || stringNumber > 6) return;
+        if (!Number.isInteger(fret) || fret < 0 || fret > 36) return;
+        events.push({ startTime, stringNumber, fret });
+      });
+    });
+  };
+
+  (Array.isArray(score?.bars) ? score.bars : []).forEach((bar) => {
+    addNotes(bar?.notes, Number(bar?.startTime) || 0);
+    (Array.isArray(bar?.beats) ? bar.beats : []).forEach((beat) => {
+      addNotes(beat?.notes, Number(beat?.startTime ?? bar?.startTime) || 0);
+    });
+  });
+  addNotes(score?.notes, 0);
+  return events.sort((left, right) => left.startTime - right.startTime);
+}
+
+function restoreDefaultScoreEvents() {
+  const tablature = $('[data-tablature]');
+  const playhead = $('[data-score-playhead]');
+  if (!tablature || !state.defaultTabEvents.length) return;
+  $$('.tab-event', tablature).forEach((event) => event.remove());
+  state.defaultTabEvents.forEach((event) => tablature.insertBefore(event.cloneNode(true), playhead));
+}
+
+function renderScore(score) {
+  const events = scoreEvents(score).slice(0, 48);
+  if (!events.length) return;
+  const tablature = $('[data-tablature]');
+  const playhead = $('[data-score-playhead]');
+  if (!tablature || !playhead) return;
+  $$('.tab-event', tablature).forEach((event) => event.remove());
+  const lastEvent = events[events.length - 1];
+  const duration = Math.max(1, state.duration, lastEvent?.startTime || 0);
+  events.forEach((event) => {
+    const button = document.createElement('button');
+    button.className = 'tab-event';
+    button.type = 'button';
+    button.dataset.seek = String(event.startTime);
+    button.style.setProperty('--x', `${Math.max(3, Math.min(96, event.startTime / duration * 100)).toFixed(2)}%`);
+    button.style.setProperty('--y', String(event.stringNumber));
+    button.textContent = String(event.fret);
+    button.setAttribute('aria-label', `${event.stringNumber} 弦 ${event.fret} 品，${formatTime(event.startTime, true)}`);
+    tablature.insertBefore(button, playhead);
+  });
+}
+
+function applyScore(score) {
+  if (!score || typeof score !== 'object') return;
+  state.score = score;
+  if (typeof score.title === 'string' && score.title.trim()) state.courseTitle = score.title.trim().slice(0, 255);
+  const scoreBpm = Number(score.bpm);
+  if (Number.isFinite(scoreBpm) && scoreBpm > 0 && scoreBpm <= 400) state.bpm = Math.round(scoreBpm);
+  state.timeSignature = normalizeTimeSignature(score.timeSignature ?? score.time_signature);
+  const bars = Array.isArray(score.bars) ? score.bars : [];
+  const declaredDuration = Number(score.duration);
+  const barDuration = Math.max(0, ...bars.map((bar) => {
+    const endTime = Number(bar?.endTime);
+    return Number.isFinite(endTime) && endTime >= 0 ? endTime : 0;
+  }));
+  const scoreDuration = Number.isFinite(declaredDuration) && declaredDuration > 0
+    ? declaredDuration
+    : barDuration;
+  if (Number.isFinite(state.mediaDuration) && state.mediaDuration > 0) {
+    state.duration = state.mediaDuration;
+  } else if (Number.isFinite(scoreDuration) && scoreDuration > 0 && scoreDuration <= 86_400) {
+    state.duration = scoreDuration;
+  }
+  renderScore(score);
+  updateCourseCopy();
+}
+
+async function activateRemoteCourse(course, loadId = ++state.courseLoadId) {
+  if (!course?.id) throw new Error('Invalid course');
+  if (loadId !== state.courseLoadId) return false;
+  clearCoursePolling();
+  resetAnalysis();
+  state.file = null;
+  state.videoValidationId += 1;
+  state.videoValidationPending = false;
+  state.videoValidated = true;
+  if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
+  state.videoUrl = null;
+  state.remoteCourse = course;
+  state.remoteVideoUrl = course.video_path ? courses.getVideoUrl(course.id) : null;
+  resetPlaybackState();
+  state.courseTitle = String(course.title || '未命名吉他课程').slice(0, 255);
+  const courseDuration = Number(course.duration);
+  state.duration = Number.isFinite(courseDuration) && courseDuration > 0 ? courseDuration : DEMO_DURATION;
+  state.mediaDuration = null;
+  const courseBpm = Number(course.bpm);
+  state.bpm = Number.isFinite(courseBpm) && courseBpm > 0 ? Math.min(400, Math.round(courseBpm)) : 92;
+  state.timeSignature = normalizeTimeSignature(course.time_signature);
+  state.score = null;
+  restoreDefaultScoreEvents();
+  $('[data-dropzone]').hidden = false;
+  $('[data-selected-file]').hidden = true;
+  const input = $('#videoInput');
+  if (input) input.value = '';
+  const url = new URL(window.location.href);
+  url.searchParams.set('course', course.id);
+  window.history.replaceState({}, '', url);
+  updateCourseCopy();
+  updateStartAnalysisButton();
+  setVideoSources();
+  if (course.score_path) {
+    try {
+      const score = await courses.getScore(course.id);
+      if (loadId !== state.courseLoadId || state.remoteCourse?.id !== course.id) return false;
+      applyScore(score);
+    } catch {
+      if (loadId === state.courseLoadId && state.remoteCourse?.id === course.id) {
+        showToast('课程视频已载入，但谱面暂时不可用。', 'error');
+      }
+    }
+  }
+  return loadId === state.courseLoadId;
+}
+
+function courseStatus(course) {
+  if (course.status === 'ready') return { filter: 'ready', label: '可以开始', className: 'state-ready' };
+  if (course.status === 'error') return { filter: 'learning', label: '需要处理', className: 'state-learning' };
+  return { filter: 'learning', label: '解析准备中', className: 'state-learning' };
+}
+
+function createCourseCard(course, index) {
+  const status = courseStatus(course);
+  const article = document.createElement('article');
+  article.className = 'library-card';
+  article.dataset.status = status.filter;
+
+  const art = document.createElement('div');
+  art.className = `library-art ${['art-umber', 'art-sage', 'art-ink'][index % 3]}`;
+  const lesson = document.createElement('span');
+  lesson.textContent = `LESSON ${String(index + 1).padStart(2, '0')}`;
+  const initial = document.createElement('strong');
+  initial.textContent = String(course.key || course.title || 'C').trim().slice(0, 2).toUpperCase();
+  const strings = document.createElement('i');
+  const duration = document.createElement('small');
+  duration.textContent = formatTime(course.duration || DEMO_DURATION);
+  art.append(lesson, initial, strings, duration);
+
+  const body = document.createElement('div');
+  body.className = 'library-body';
+  const meta = document.createElement('div');
+  meta.className = 'card-meta';
+  const badge = document.createElement('span');
+  badge.className = status.className;
+  badge.textContent = status.label;
+  const time = document.createElement('time');
+  const createdAt = course.created_at ? new Date(course.created_at) : null;
+  time.textContent = createdAt && !Number.isNaN(createdAt.getTime())
+    ? new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(createdAt)
+    : '最近创建';
+  meta.append(badge, time);
+  const title = document.createElement('h2');
+  title.textContent = course.title || '未命名吉他课程';
+  const details = document.createElement('p');
+  details.textContent = `${course.bpm || '--'} BPM · ${normalizeTimeSignature(course.time_signature)} · ${course.video_path ? '视频已就绪' : '等待视频'}`;
+  const progressCopy = document.createElement('div');
+  progressCopy.className = 'progress-copy';
+  const progressLabel = document.createElement('span');
+  progressLabel.textContent = course.status === 'ready' ? '课程已准备' : '后端处理进度';
+  const progressValue = document.createElement('strong');
+  const progress = Math.max(0, Math.min(100, Number(course.progress) || 0));
+  progressValue.textContent = `${progress}%`;
+  progressCopy.append(progressLabel, progressValue);
+  const progressBar = document.createElement('div');
+  progressBar.className = 'linear-progress';
+  const progressFill = document.createElement('i');
+  progressFill.style.setProperty('--value', `${progress}%`);
+  progressBar.append(progressFill);
+  const button = document.createElement('button');
+  button.className = 'secondary-button full-width';
+  button.type = 'button';
+  button.dataset.action = 'open-course';
+  button.dataset.courseId = course.id;
+  button.textContent = course.status === 'ready' ? '查看课程 →' : '查看解析状态 →';
+  body.append(meta, title, details, progressCopy, progressBar, button);
+  article.append(art, body);
+  return article;
+}
+
+function updateLibraryCounts() {
+  const counts = { all: state.backendCourses.length, learning: 0, ready: 0, complete: 0 };
+  state.backendCourses.forEach((course) => {
+    counts[courseStatus(course).filter] += 1;
+  });
+  $$('[data-filter]').forEach((button) => {
+    const count = $('span', button);
+    if (count) count.textContent = String(counts[button.dataset.filter] || 0);
+  });
+}
+
+function renderBackendCourses() {
+  const grid = $('[data-library-grid]');
+  if (!grid) return;
+  if (!state.backendCourses.length) {
+    const empty = document.createElement('div');
+    empty.className = 'library-empty card-surface';
+    const eyebrow = document.createElement('span');
+    eyebrow.textContent = 'EMPTY LIBRARY';
+    const title = document.createElement('strong');
+    title.textContent = '还没有保存到后端的课程。';
+    const copy = document.createElement('p');
+    copy.textContent = '上传一段 MP4 或 MOV，完成质量检查后即可创建第一门课程。';
+    empty.append(eyebrow, title, copy);
+    grid.replaceChildren(empty);
+    updateLibraryCounts();
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  state.backendCourses.forEach((course, index) => fragment.append(createCourseCard(course, index)));
+  grid.replaceChildren(fragment);
+  updateLibraryCounts();
+}
+
+async function refreshBackendCourses() {
+  try {
+    const result = await courses.list();
+    state.backendAvailable = true;
+    state.backendCourses = Array.isArray(result) ? result : [];
+    renderBackendCourses();
+    return state.backendCourses;
+  } catch {
+    state.backendAvailable = false;
+    return [];
+  }
+}
+
+async function openRemoteCourse(courseId) {
+  const loadId = ++state.courseLoadId;
+  try {
+    const cached = state.backendCourses.find((course) => course.id === courseId);
+    const course = cached || await courses.get(courseId);
+    if (loadId !== state.courseLoadId) return;
+    const activation = activateRemoteCourse(course, loadId);
+    navigate(course.status === 'ready' ? 'overview' : 'analysis');
+    await activation;
+  } catch {
+    if (loadId === state.courseLoadId) showToast('课程暂时无法载入，请确认后端服务正在运行。', 'error');
+  }
+}
+
+async function persistSelectedCourse() {
+  if (!state.file) return null;
+  const selectedFile = state.file;
+  const activeJob = uploadJobs.get(selectedFile);
+  if (activeJob) return activeJob;
+  const selectedTitle = state.courseTitle;
+  const job = courses.upload(selectedFile, selectedTitle)
+    .then(async (course) => {
+      state.backendAvailable = true;
+      if (state.file === selectedFile) {
+        state.remoteCourse = course;
+        state.remoteVideoUrl = course.video_path ? courses.getVideoUrl(course.id) : null;
+        if (state.view === 'analysis' && course.status !== 'ready') {
+          renderRemoteAnalysisStatus(course);
+          scheduleCoursePolling();
+        }
+        showToast('课程已保存；当前版本需单独启动自动转谱服务。');
+      }
+      await refreshBackendCourses();
+      return course;
+    })
+    .catch(() => {
+      if (state.file === selectedFile) {
+        state.backendAvailable = false;
+        showToast('后端暂时不可用，已继续使用本地预览，不会丢失当前视频。', 'error');
+      }
+      return null;
+    })
+    .finally(() => {
+      uploadJobs.delete(selectedFile);
+    });
+  uploadJobs.set(selectedFile, job);
+  return job;
+}
+
+function startSelectedAnalysis() {
+  if (state.file && (!state.videoValidated || state.videoValidationPending)) {
+    showToast('请等待视频质量检查完成后再开始解析。', 'error');
+    return;
+  }
+  resetAnalysis();
+  navigate('analysis');
+  if (state.file) void persistSelectedCourse();
+}
+
+async function prepareDemo() {
+  const backendDemo = state.backendCourses.find((course) => course.status === 'ready' && course.video_path)
+    || state.backendCourses.find((course) => course.video_path);
+  if (backendDemo) {
+    try {
+      const activation = activateRemoteCourse(backendDemo);
+      navigate(backendDemo.status === 'ready' ? 'overview' : 'analysis');
+      await activation;
+      showToast('已载入后端课程与可用谱面。');
+      return;
+    } catch {
+      showToast('后端示例暂时不可用，已切换为内置课程。', 'error');
+    }
+  }
   resetVideoSelection();
   state.courseTitle = '清晨指弹练习';
   state.duration = DEMO_DURATION;
@@ -283,13 +714,96 @@ function resetAnalysis() {
   $$('.analysis-wave .wave-bar').forEach((bar) => bar.classList.remove('is-visible', 'is-active'));
 }
 
+function clearCoursePolling() {
+  window.clearTimeout(state.coursePollTimer);
+  state.coursePollTimer = null;
+}
+
+function renderRemoteAnalysisStatus(course) {
+  window.clearInterval(state.analysisTimer);
+  state.analysisTimer = null;
+  const progress = Math.max(0, Math.min(100, Number(course?.progress) || 0));
+  const ready = course?.status === 'ready';
+  const failed = course?.status === 'error';
+  const completedSteps = ready ? ANALYSIS_RESULTS.length : Math.max(1, Math.floor(progress / 12.5));
+
+  $$('[data-analysis-step]').forEach((item, index) => {
+    const done = index < completedSteps;
+    const current = !ready && !failed && index === Math.min(completedSteps, ANALYSIS_RESULTS.length - 1);
+    item.classList.toggle('is-done', done);
+    item.classList.toggle('is-current', current);
+    const label = $('span', item);
+    if (done) label.textContent = index === 0 ? '视频已安全保存' : ANALYSIS_RESULTS[index].step;
+    else if (current) label.textContent = '等待处理服务…';
+    else label.textContent = '等待开始';
+  });
+
+  const shownProgress = ready ? 100 : progress;
+  $('[data-analysis-percent]').textContent = `${shownProgress}%`;
+  $('.analysis-total')?.setAttribute('aria-valuenow', String(shownProgress));
+  $('[data-analysis-message]').textContent = ready
+    ? '课程已准备就绪'
+    : (failed ? '解析未能完成' : '视频已保存，等待自动转谱服务');
+  $('[data-analysis-detail]').textContent = ready
+    ? '谱面与视频已可以进入同步跟练'
+    : (failed ? '请返回并重新上传，或稍后查看课程状态' : `后端进度 ${progress}% · 当前版本尚未内置 AI 转谱工作进程`);
+  $('[data-action="analysis-complete"]').hidden = !ready;
+  state.analysisComplete = ready;
+
+  const bars = $$('.analysis-wave .wave-bar');
+  const visibleCount = Math.round(shownProgress / 100 * bars.length);
+  bars.forEach((bar, index) => {
+    bar.classList.toggle('is-visible', index < visibleCount);
+    bar.classList.toggle('is-active', !ready && !failed && index >= Math.max(0, visibleCount - 7) && index < visibleCount);
+  });
+}
+
+function scheduleCoursePolling() {
+  clearCoursePolling();
+  const course = state.remoteCourse;
+  if (state.view !== 'analysis' || !course?.id || ['ready', 'error'].includes(course.status)) return;
+  const loadId = state.courseLoadId;
+  state.coursePollTimer = window.setTimeout(async () => {
+    try {
+      const freshCourse = await courses.get(course.id);
+      if (loadId !== state.courseLoadId || state.remoteCourse?.id !== course.id) return;
+      state.remoteCourse = freshCourse;
+      const index = state.backendCourses.findIndex((item) => item.id === freshCourse.id);
+      if (index >= 0) state.backendCourses[index] = freshCourse;
+      renderBackendCourses();
+      if (freshCourse.status === 'ready') {
+        await activateRemoteCourse(freshCourse, loadId);
+        if (loadId === state.courseLoadId) {
+          renderRemoteAnalysisStatus(freshCourse);
+          showToast('后端课程已准备完成，可以进入跟练。');
+        }
+        return;
+      }
+      renderRemoteAnalysisStatus(freshCourse);
+    } catch {
+      // 短暂断网不改变当前进度，下一轮继续尝试。
+    }
+    if (loadId === state.courseLoadId) scheduleCoursePolling();
+  }, 3000);
+}
+
 function beginAnalysis() {
   if (state.analysisTimer || state.analysisComplete || state.view !== 'analysis') return;
+  if (state.remoteCourse && state.remoteCourse.status !== 'ready') {
+    renderRemoteAnalysisStatus(state.remoteCourse);
+    scheduleCoursePolling();
+    return;
+  }
   advanceAnalysis();
   state.analysisTimer = window.setInterval(advanceAnalysis, 720);
 }
 
 function advanceAnalysis() {
+  if (state.remoteCourse && state.remoteCourse.status !== 'ready') {
+    renderRemoteAnalysisStatus(state.remoteCourse);
+    scheduleCoursePolling();
+    return;
+  }
   state.analysisIndex += 1;
   if (state.analysisIndex >= ANALYSIS_RESULTS.length) {
     finishAnalysis();
@@ -322,6 +836,10 @@ function advanceAnalysis() {
 }
 
 function finishAnalysis() {
+  if (state.remoteCourse && state.remoteCourse.status !== 'ready') {
+    renderRemoteAnalysisStatus(state.remoteCourse);
+    return;
+  }
   window.clearInterval(state.analysisTimer);
   state.analysisTimer = null;
   state.analysisIndex = ANALYSIS_RESULTS.length;
@@ -369,13 +887,48 @@ function openMicModal(pendingView = null) {
 async function allowMicrophone() {
   const button = $('[data-action="allow-mic"]');
   const original = button.textContent;
+  let stream = null;
+  let audioContext = null;
+  let adopted = false;
   button.disabled = true;
   button.textContent = '正在检查环境…';
   try {
-    if (navigator.mediaDevices?.getUserMedia) {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((track) => track.stop());
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('MediaDevices unavailable');
+    const requestId = ++state.micRequestId;
+    await stopMicrophone(false, false);
+    if (requestId !== state.micRequestId) return;
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) throw new Error('Web Audio unavailable');
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      },
+      video: false,
+    });
+    if (requestId !== state.micRequestId) return;
+    audioContext = new AudioContextClass();
+    await audioContext.resume();
+    if (requestId !== state.micRequestId) return;
+    const detector = new GuitarDetector(audioContext);
+    await detector.start(stream);
+    if (requestId !== state.micRequestId) {
+      detector.stop();
+      return;
     }
+    state.micStream = stream;
+    state.micContext = audioContext;
+    state.micDetector = detector;
+    adopted = true;
+    stream.getTracks().forEach((track) => {
+      track.addEventListener('ended', () => {
+        if (state.micStream !== stream) return;
+        void stopMicrophone().then(() => {
+          showToast('麦克风连接已结束，可从顶部重新开启。', 'error');
+        });
+      }, { once: true });
+    });
     state.micResolved = true;
     state.micAllowed = true;
     updateMicrophoneUI();
@@ -384,14 +937,51 @@ async function allowMicrophone() {
     if (state.pendingView) navigate(state.pendingView);
     state.pendingView = null;
   } catch {
-    showToast('未能获取麦克风权限，可以选择“仅观看课程”继续。', 'error');
+    if (!adopted) {
+      state.micAllowed = false;
+      updateMicrophoneUI();
+      showToast('未能获取麦克风权限，可以选择“仅观看课程”继续。', 'error');
+    }
   } finally {
+    if (!adopted) {
+      stream?.getTracks().forEach((track) => track.stop());
+      if (audioContext && audioContext.state !== 'closed') {
+        try {
+          await audioContext.close();
+        } catch {
+          // 获取权限后的初始化失败也必须尽力释放浏览器音频资源。
+        }
+      }
+    }
     button.disabled = false;
     button.textContent = original;
   }
 }
 
+async function stopMicrophone(updateUI = true, invalidateRequest = true) {
+  if (invalidateRequest) state.micRequestId += 1;
+  const detector = state.micDetector;
+  const stream = state.micStream;
+  const context = state.micContext;
+  state.micDetector = null;
+  state.micStream = null;
+  state.micContext = null;
+  state.lastDetection = null;
+  state.micAllowed = false;
+  detector?.stop();
+  stream?.getTracks().forEach((track) => track.stop());
+  if (context && context.state !== 'closed') {
+    try {
+      await context.close();
+    } catch {
+      // 某些浏览器会在页面卸载期间提前关闭 AudioContext。
+    }
+  }
+  if (updateUI) updateMicrophoneUI();
+}
+
 function skipMicrophone() {
+  void stopMicrophone(false);
   state.micResolved = true;
   state.micAllowed = false;
   updateMicrophoneUI();
@@ -425,7 +1015,7 @@ function playPlayer() {
   const video = $('#playerVideo');
   state.playing = true;
   state.lastFrameAt = performance.now();
-  if (state.videoUrl && video) {
+  if ((state.videoUrl || state.remoteVideoUrl) && video) {
     video.currentTime = Math.min(state.playerTime, video.duration || state.duration);
     video.playbackRate = state.playerSpeed;
     video.play().catch(() => {
@@ -450,13 +1040,23 @@ function pausePlayer() {
 function playerFrame(timestamp) {
   if (!state.playing) return;
   const video = $('#playerVideo');
-  if (state.videoUrl && video && Number.isFinite(video.currentTime)) {
+  if ((state.videoUrl || state.remoteVideoUrl) && video && Number.isFinite(video.currentTime)) {
     state.playerTime = video.currentTime;
   } else {
     const elapsed = Math.min(0.1, Math.max(0, (timestamp - state.lastFrameAt) / 1000));
     state.playerTime += elapsed * state.playerSpeed;
   }
   state.lastFrameAt = timestamp;
+
+  if (state.micAllowed && state.micDetector && timestamp - state.micLastSampleAt >= 120) {
+    state.micLastSampleAt = timestamp;
+    try {
+      state.lastDetection = state.micDetector.getDetection();
+    } catch {
+      void stopMicrophone();
+      showToast('麦克风连接已中断，请重新开启。', 'error');
+    }
+  }
 
   if (state.loopEnabled && state.playerTime >= Math.min(28, state.duration)) {
     seekPlayer(Math.min(17.42, state.duration - 1));
@@ -474,7 +1074,7 @@ function playerFrame(timestamp) {
 function seekPlayer(seconds) {
   state.playerTime = Math.max(0, Math.min(Number(seconds) || 0, state.duration));
   const video = $('#playerVideo');
-  if (state.videoUrl && video && Number.isFinite(video.duration)) {
+  if ((state.videoUrl || state.remoteVideoUrl) && video && Number.isFinite(video.duration)) {
     video.currentTime = Math.min(state.playerTime, video.duration);
   }
   updatePlayerUI();
@@ -531,18 +1131,28 @@ function updatePlayerUI() {
   const title = $('[data-feedback-title]');
   const copy = $('[data-feedback-copy]');
   const score = $('[data-live-score]');
+  const detection = state.lastDetection;
+  const hasPitch = state.micAllowed
+    && detection?.rms >= 0.005
+    && detection.pitch?.confidence >= 0.65
+    && detection.pitch.frequency > 0;
   if (!state.playing) {
     title.textContent = state.playerTime > 0 ? '已暂停' : '准备就绪';
     copy.textContent = state.playerTime > 0 ? '可点击谱面音符精确定位。' : '点击播放，跟随老师开始演奏。';
-    score.textContent = state.playerTime > 0 ? '88' : '--';
-  } else if (state.playerTime > 28 && state.playerTime < 34) {
-    title.textContent = '有一个漏音';
-    copy.textContent = '1 弦发声不够清晰，先继续完成这个乐句。';
-    score.textContent = '84';
+    score.textContent = '--';
+  } else if (hasPitch) {
+    const noteName = midiToNoteName(detection.pitch.midi);
+    title.textContent = `识别到 ${noteName}`;
+    copy.textContent = `${Math.round(detection.pitch.frequency)} Hz · ${detection.onset ? '起音清晰' : '持续聆听中'}`;
+    score.textContent = noteName;
+  } else if (state.micAllowed) {
+    title.textContent = '正在聆听';
+    copy.textContent = '请弹响一个清晰的单音，系统会显示实时音高。';
+    score.textContent = '--';
   } else {
-    title.textContent = state.micAllowed ? '正在聆听' : '跟随播放';
-    copy.textContent = state.playerTime < 17 ? '节奏很稳，保持当前的右手力度。' : '换把前稍微放松手腕，不要完全抬起食指。';
-    score.textContent = String(Math.min(94, 86 + Math.floor(state.playerTime / 8)));
+    title.textContent = '跟随播放';
+    copy.textContent = '仅观看模式不会生成演奏判定；开启麦克风可查看实时音高。';
+    score.textContent = '--';
   }
 }
 
@@ -601,6 +1211,10 @@ function openLayer(layer) {
 
 function closeLayer(layer, restoreFocus = true) {
   if (!layer || layer.hidden) return;
+  if (layer.matches('[data-mic-modal]') && !state.micAllowed) {
+    state.micRequestId += 1;
+    state.pendingView = null;
+  }
   layer.hidden = true;
   if ($('[data-mic-modal]').hidden && $('[data-settings-layer]').hidden) {
     document.body.style.overflow = '';
@@ -653,8 +1267,7 @@ function filterLibrary(filter) {
 function handleAction(action, element) {
   switch (action) {
     case 'start-analysis':
-      resetAnalysis();
-      navigate('analysis');
+      startSelectedAnalysis();
       break;
     case 'reset-file':
       resetVideoSelection();
@@ -663,14 +1276,18 @@ function handleAction(action, element) {
       prepareDemo();
       break;
     case 'skip-analysis':
-      finishAnalysis();
+      if (state.remoteCourse && state.remoteCourse.status !== 'ready') {
+        showToast('后端课程仍在等待转谱，不能跳过真实处理状态。', 'error');
+      } else {
+        finishAnalysis();
+      }
       break;
     case 'analysis-complete':
       navigate('overview');
       break;
     case 'preview-course': {
       const video = $('#overviewVideo');
-      if (state.videoUrl && video) {
+      if ((state.videoUrl || state.remoteVideoUrl) && video) {
         if (video.paused) video.play().catch(() => showToast('请再点一次播放预览。', 'error'));
         else video.pause();
       } else {
@@ -688,7 +1305,12 @@ function handleAction(action, element) {
       navigate('focus');
       break;
     case 'open-mic':
-      openMicModal();
+      if (state.micAllowed) {
+        void stopMicrophone();
+        showToast('麦克风已关闭，原始音频不会被保存。');
+      } else {
+        openMicModal();
+      }
       break;
     case 'close-mic':
       closeLayer($('[data-mic-modal]'));
@@ -751,6 +1373,9 @@ function handleAction(action, element) {
       break;
     case 'try-focus':
       startFocusAttempt();
+      break;
+    case 'open-course':
+      void openRemoteCourse(element.dataset.courseId);
       break;
     default:
       break;
@@ -838,6 +1463,31 @@ function initUpload() {
 
 function initEvents() {
   document.addEventListener('click', handleClick);
+  const playerVideo = $('#playerVideo');
+  playerVideo?.addEventListener('loadedmetadata', () => {
+    const actualDuration = Number(playerVideo.duration);
+    if (!Number.isFinite(actualDuration) || actualDuration <= 0) return;
+    state.mediaDuration = actualDuration;
+    state.duration = actualDuration;
+    state.playerTime = Math.min(state.playerTime, actualDuration);
+    updateCourseCopy();
+    updatePlayerUI();
+  });
+  playerVideo?.addEventListener('ended', () => {
+    if (state.loopEnabled && state.duration > 18) {
+      seekPlayer(Math.min(17.42, state.duration - 0.25));
+      playerVideo.play().catch(() => pausePlayer());
+      return;
+    }
+    state.playerTime = state.duration;
+    pausePlayer();
+    navigate('results');
+  });
+  playerVideo?.addEventListener('error', () => {
+    if (!playerVideo.currentSrc) return;
+    pausePlayer();
+    showToast('课程视频无法播放，请检查文件或后端媒体地址。', 'error');
+  });
   $('[data-seek-track]').addEventListener('click', handleSeekPointer);
   $('[data-seek-track]').addEventListener('keydown', (event) => {
     if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
@@ -856,6 +1506,9 @@ function initEvents() {
   window.addEventListener('beforeunload', () => {
     savePreferences();
     if (state.videoUrl) URL.revokeObjectURL(state.videoUrl);
+    state.micDetector?.stop();
+    state.micStream?.getTracks().forEach((track) => track.stop());
+    if (state.micContext?.state !== 'closed') void state.micContext?.close();
   });
   window.addEventListener('resize', () => {
     if (state.view === 'player') updatePlayerUI();
@@ -864,6 +1517,7 @@ function initEvents() {
 
 function bootstrap() {
   loadPreferences();
+  state.defaultTabEvents = $$('.tab-event').map((event) => event.cloneNode(true));
   buildWaveforms();
   initUpload();
   initEvents();
@@ -872,6 +1526,21 @@ function bootstrap() {
   setVideoSources();
   chooseTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
   activateView(routeFromHash());
+  const bootstrapLoadId = state.courseLoadId;
+  void refreshBackendCourses().then(async (availableCourses) => {
+    if (bootstrapLoadId !== state.courseLoadId) return;
+    const requestedCourseId = new URLSearchParams(window.location.search).get('course');
+    if (!requestedCourseId) return;
+    const requestedCourse = availableCourses.find((course) => course.id === requestedCourseId);
+    if (requestedCourse) {
+      const loadId = ++state.courseLoadId;
+      const activation = activateRemoteCourse(requestedCourse, loadId);
+      if (routeFromHash() === 'home') navigate(requestedCourse.status === 'ready' ? 'overview' : 'analysis');
+      await activation;
+    } else if (state.backendAvailable) {
+      await openRemoteCourse(requestedCourseId);
+    }
+  });
 }
 
 bootstrap();

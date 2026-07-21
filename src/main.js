@@ -5,9 +5,7 @@
 
 import { GuitarApp } from './app.js';
 import { initDemoUI } from './ui-demo.js';
-import { local } from './shared/utils/storage.js';
-
-const COURSES_KEY = 'guitar-courses';
+import { courses as api } from './shared/utils/api.js';
 
 /**
  * 从 URL 参数获取课程 ID
@@ -19,20 +17,11 @@ function getCourseIdFromUrl() {
 }
 
 /**
- * 从本地存储加载课程
- * @param {string} id
- * @returns {object | null}
- */
-function loadCourse(id) {
-  const courses = local.get(COURSES_KEY, []);
-  return courses.find((c) => c.id === id) || null;
-}
-
-/**
  * 在执行页加载课程
  * @param {object} course
+ * @param {string} videoUrl
  */
-function loadCourseIntoPlayer(course) {
+function loadCourseIntoPlayer(course, videoUrl) {
   const video = document.getElementById('videoPlayer');
   const overlay = document.getElementById('videoOverlay');
   const status = document.getElementById('videoStatus');
@@ -43,9 +32,8 @@ function loadCourseIntoPlayer(course) {
 
   if (!video || !course) return;
 
-  const url = course.localUrl || course.sourceUrl;
-  if (url) {
-    video.src = url;
+  if (videoUrl) {
+    video.src = videoUrl;
     video.load();
   }
 
@@ -71,11 +59,22 @@ async function bootstrap() {
   // 第一版：使用 ui-demo 的独立音游循环，避免与 GuitarApp 循环冲突
   initDemoUI();
 
-  // 如果从主页带课程 ID 跳转，加载该课程视频
+  // 如果从主页带课程 ID 跳转，从后端加载课程与谱面
   const courseId = getCourseIdFromUrl();
   if (courseId) {
-    const course = loadCourse(courseId);
-    if (course) loadCourseIntoPlayer(course);
+    try {
+      const course = await api.get(courseId);
+      const videoUrl = api.getVideoUrl(courseId);
+      loadCourseIntoPlayer(course, videoUrl);
+
+      // 如果后端已有谱面，加载到 GuitarApp（后续完整实现）
+      if (course.score_path) {
+        const score = await api.getScore(courseId);
+        console.log('[GuitarApp] loaded score', score);
+      }
+    } catch (err) {
+      console.error('[GuitarApp] failed to load course from backend', err);
+    }
   }
 
   console.log('[GuitarApp] bootstrapped');
