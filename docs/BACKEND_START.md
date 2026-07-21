@@ -200,6 +200,59 @@ pip install -r requirements-dev.txt
 
 Docker 构建已内置上述两步（先 `requirements-pipeline.txt --no-deps`，再 `requirements.txt`）。
 
+## 安装依赖
+
+创建虚拟环境并安装后端依赖（Basic Pitch 在 Python 3.11+ 的 PyPI 元数据会强制依赖 TensorFlow，但我们使用 ONNX 路径，因此需要先 `--no-deps` 安装）：
+
+```bash
+cd backend
+python -m venv .venv
+# macOS / Linux
+source .venv/bin/activate
+# Windows PowerShell
+# .venv\Scripts\Activate.ps1
+
+pip install --no-deps -r requirements-pipeline.txt
+pip install -r requirements.txt
+
+# 开发测试依赖
+pip install -r requirements-dev.txt
+```
+
+Docker 构建已内置上述两步（先 `requirements-pipeline.txt --no-deps`，再 `requirements.txt`）。
+
+## 端口与 CORS
+
+前端开发服务器固定在 **3000** 端口（见 `vite.config.js`）。后端默认 CORS 白名单已包含 `http://localhost:3000` 和 `http://127.0.0.1:3000`。前端 API 基地址：
+
+- 开发环境：`http://127.0.0.1:8000`（由 `src/shared/utils/api.js` 自动推断，也可通过 `VITE_API_BASE` 覆盖）
+- 生产环境：同域 `/api`（需要反向代理或网关）
+
+## 前后端连通性验证
+
+已验证项目（2026-07-21）：
+
+| 检查项 | 结果 |
+|--------|------|
+| 后端健康检查 | `GET /health` → `{"status":"ok"}` |
+| CORS 预检 | `OPTIONS /api/v1/courses` 返回 `Access-Control-Allow-Origin: http://localhost:3000` |
+| 课程列表 | `GET /api/v1/courses` 正常返回 JSON |
+| 视频读取 | `GET /api/v1/courses/{id}/video` 返回 `video/mp4` 流 |
+| 谱面读取 | `GET /api/v1/courses/{id}/score` 返回 `application/json` |
+| 前端开发服务器 | `npm run dev` 在 3000 端口启动成功 |
+| 前端 API 调用 | 默认入口 `src/product-app.js` 成功调用 `courses.list()` 与 `courses.getScore()` |
+
+## 性能基线
+
+- 课程列表/详情/视频/谱面 API：毫秒级响应。
+- 谱面 JSON 大小：实测 50–85 KB，无加载压力。
+- 自动解析流水线：60 秒视频约 30–60 秒（取决于机器），通过 `POST /api/v1/courses/{id}/parse` 异步排队，不阻塞 HTTP 响应。
+
+## 已知生态问题
+
+1. **双前端过渡**：当前默认入口是 `index.html` → `src/product-app.js`（艺术化单页，已接通后端）。`src/main.js`、`src/home.js`、`src/app.js`、`src/ui-demo.js` 为过渡期旧实现，尚未完全整合，仓库中保留以便后续择优合并。
+2. **解析流水线依赖**：Basic Pitch 的 PyPI 元数据强制 TensorFlow，需使用 `--no-deps` 安装，已通过 `requirements-pipeline.txt` + `Dockerfile` 两步安装解决。
+
 ## 运行方式
 
 启动后端（SQLite 默认）：

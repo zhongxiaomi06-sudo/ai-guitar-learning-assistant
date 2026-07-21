@@ -14,13 +14,13 @@
 
 ## 当前状态
 
-**阶段**：艺术化默认入口、FastAPI 课程 API 与音频 → 六线谱 MVP 已合并到同一仓库。上传后可由 FastAPI 后台任务触发解析并轮询真实状态；当前最大缺口是后端 Score JSON 尚未驱动跟练音符与评分，仓库内仍有多套过渡期前端。
+**阶段**：艺术化默认入口、FastAPI 课程 API 与音频 → 六线谱 MVP 已合并到同一仓库。前后端 API 已验证连通（CORS、上传、视频/谱面读取、异步解析排队）。当前最大缺口是后端 Score JSON 尚未驱动跟练音符与评分，仓库内仍有多套过渡期前端。
 
-**技术栈**：前端 Vite + 原生 JavaScript；后端 FastAPI + SQLAlchemy；存储支持本地文件系统与 MinIO；转谱运行时为 Python 3.11 + FFmpeg + Basic Pitch 包默认模型。
+**技术栈**：前端 Vite + 原生 JavaScript；后端 FastAPI + SQLAlchemy；存储支持本地文件系统与 MinIO；转谱运行时为 Python 3.11 + FFmpeg + Basic Pitch 包默认模型（ONNX 路径，已绕过 TensorFlow 依赖）。
 
 **基础构建工具**：Vite（前端）、Uvicorn（后端）。
 
-**最近更新**：2026-07-21 — 合并最新 GitHub 转谱流水线与本地艺术化前端，接通上传、后台解析和状态轮询，并修复合并冲突与审计问题。
+**最近更新**：2026-07-21 — 完成合并后检查：134 后端测试 + 15 前端测试通过，前后端开发服务器可正常通信，修复 Basic Pitch 依赖安装问题，并补充文档。
 
 ## 项目定位
 
@@ -94,6 +94,10 @@ guitar/
 - [x] 本地命令行脚本 `scripts/run_pipeline.py` 与 Canonical Score JSON 输出
 - [x] 上传后触发后台解析、轮询进度与错误状态的 MVP 链路
 - [x] 合并碎音符并优化可演奏弦品路径求解
+- [x] 合并 agent audit fixes 分支（CI、测试、产品化前端、后端增强）
+- [x] 修复 Basic Pitch 依赖安装问题（Python 3.11+ 绕过 TensorFlow）
+- [x] 验证前后端开发服务器 API 连通性（CORS、课程列表、视频、谱面、解析排队）
+- [x] 134 后端测试 + 15 前端测试全部通过
 
 ## 待办
 
