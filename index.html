@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no,email=no,address=no">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1a1a1a" media="(prefers-color-scheme: dark)">
+  <title>吉他 AI 跟弹 - 执行页</title>
+  <link rel="stylesheet" href="/src/assets/css/reset.css">
+  <link rel="stylesheet" href="/src/assets/css/variables.css">
+  <link rel="stylesheet" href="/src/assets/css/base.css">
+  <link rel="stylesheet" href="/src/assets/css/mobile.css" media="(max-width: 767.98px)">
+  <link rel="stylesheet" href="/src/assets/css/desktop.css" media="(min-width: 768px)">
+  <link rel="stylesheet" href="/src/assets/css/main.css">
+  <link rel="stylesheet" href="/src/assets/css/guitar.css">
+</head>
+<body>
+  <div id="app" class="app guitar-app">
+    <header class="guitar-header">
+      <div class="header-left">
+        <a href="/home.html" class="guitar-title-link">
+          <h1 class="guitar-title">吉他 AI 跟弹</h1>
+        </a>
+        <span class="guitar-subtitle" id="currentCourseTitle">跟着视频把谱子弹出来</span>
+      </div>
+      <div class="guitar-controls">
+        <button class="btn btn-ghost" id="importBtn">导入视频</button>
+        <button class="btn btn-primary" id="startBtn" disabled>
+          <span class="btn-icon">▶</span> 开始
+        </button>
+        <button class="btn btn-ghost" id="pauseBtn" disabled>
+          <span class="btn-icon">⏸</span> 暂停
+        </button>
+        <button class="btn btn-ghost" id="resetBtn" disabled>
+          <span class="btn-icon">↺</span> 重置
+        </button>
+      </div>
+    </header>
+
+    <main class="guitar-main">
+      <section class="panel video-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">视频</h2>
+          <span class="panel-badge" id="videoStatus">未导入</span>
+        </div>
+        <div class="video-wrapper">
+          <video id="videoPlayer" controls playsinline></video>
+          <div class="video-overlay" id="videoOverlay">
+            <div class="video-placeholder">
+              <div class="placeholder-icon">▶</div>
+              <p>从主页导入视频开始练习</p>
+              <p class="placeholder-hint">支持本地上传或粘贴 URL</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel score-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">乐谱</h2>
+          <span class="panel-badge" id="scoreBpm">-- BPM</span>
+        </div>
+        <div data-score class="score-canvas">
+          <div class="tab-scroll" id="tabScroll">
+            <div class="tab-ruler" id="tabRuler"></div>
+            <div class="tab-lines" id="tabLines"></div>
+            <div class="tab-playhead"></div>
+          </div>
+        </div>
+        <div class="hand-shapes">
+          <div data-left-hand class="hand-shape-box" id="leftHandBox">
+            <div class="hand-shape-title">左手</div>
+            <div class="hand-shape-content">等待开始</div>
+          </div>
+          <div data-right-hand class="hand-shape-box" id="rightHandBox">
+            <div class="hand-shape-title">右手</div>
+            <div class="hand-shape-content">等待开始</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel suggestions-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">建议</h2>
+          <span class="panel-badge" id="accuracyBadge">0%</span>
+        </div>
+        <div data-feedback class="feedback-text" data-type="pending" id="feedbackText">等待开始...</div>
+        <div data-next-hint class="next-hint" id="nextHint">准备开始</div>
+        <div class="quick-actions">
+          <button class="btn btn-ghost btn-sm" id="loopBtn">A/B 循环</button>
+          <button class="btn btn-ghost btn-sm" id="slowBtn">降速</button>
+          <button class="btn btn-ghost btn-sm" id="backVideoBtn">回看动作</button>
+        </div>
+      </section>
+
+      <section class="panel matching-panel" id="matchingPanel">
+        <div class="matching-header">
+          <div class="matching-stats">
+            <div class="stat-item">
+              <span class="stat-label">准确率</span>
+              <span class="stat-value" id="accuracyText">0%</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">连击</span>
+              <span class="stat-value" id="streakText">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">小节</span>
+              <span class="stat-value" id="barText">--</span>
+            </div>
+          </div>
+          <div class="matching-status" id="hitFeedback">准备</div>
+        </div>
+        <div class="matching-body">
+          <div class="match-canvas" data-match-canvas>
+            <canvas id="matchGameCanvas"></canvas>
+          </div>
+          <div class="pitch-gauge" id="pitchGauge">
+            <div class="gauge-label">音高</div>
+            <div class="gauge-track">
+              <div class="gauge-target"></div>
+              <div class="gauge-current" id="gaugeCurrent"></div>
+            </div>
+            <div class="gauge-label">偏差</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Floating Settings -->
+    <div class="settings-float">
+      <button class="settings-toggle" id="settingsToggle">⚙</button>
+      <div class="settings-panel" id="settingsPanel">
+        <div class="settings-panel-header">
+          <h3>设置</h3>
+          <button class="settings-close" id="settingsClose">×</button>
+        </div>
+
+        <div class="settings-group">
+          <label class="setting-label">速度</label>
+          <div class="speed-chips" id="speedChips">
+            <button class="chip" data-speed="0.5">0.5x</button>
+            <button class="chip" data-speed="0.75">0.75x</button>
+            <button class="chip active" data-speed="1.0">1.0x</button>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <label class="setting-label">难度</label>
+          <div class="difficulty-chips" id="difficultyChips">
+            <button class="chip" data-difficulty="loose">宽松</button>
+            <button class="chip active" data-difficulty="normal">标准</button>
+            <button class="chip" data-difficulty="strict">严格</button>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <label class="setting-label">判定偏移</label>
+          <div class="offset-control">
+            <input type="range" id="offsetSlider" min="-150" max="150" step="5" value="0">
+            <span id="offsetValue">0ms</span>
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <label class="setting-label">自动调速</label>
+          <button class="toggle-btn active" id="autoSlowToggle" data-active="true">
+            <span class="toggle-dot"></span>
+            <span class="toggle-text">开</span>
+          </button>
+        </div>
+
+        <div class="settings-group">
+          <label class="setting-label">输入设备</label>
+          <select class="compact-select" data-setting="inputDevice">
+            <option>默认麦克风</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+/* mobile.css - 移动端专属样式（最大 767.98px） */
+@media (max-width: 767.98px) {
+  html {
+    /* 移动端略小基准字号，便于内容展示 */
+    font-size: 15px;
+  }
+
+  .app-header {
+    padding: var(--space-sm) var(--space-md);
+    padding-top: calc(var(--space-sm) + var(--safe-top));
+  }
+
+  .app-title {
+    font-size: var(--font-size-lg);
+  }
+
+  .app-nav {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    padding-top: calc(56px + var(--safe-top));
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+
+  .app-nav.is-open {
+    transform: translateX(0);
+  }
+
+  .app-nav a {
+    font-size: var(--font-size-lg);
+  }
+
+  /* 触控优化 */
+  .btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .app-menu {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* 页面内容 */
+  .page-title {
+    font-size: var(--font-size-xxl);
+    margin-bottom: var(--space-md);
+  }
+
+  .page-desc {
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+  }
+
+  /* 列表卡片全宽 */
+  .list-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-md);
+  }
+}
