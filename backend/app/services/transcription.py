@@ -6,14 +6,11 @@ Basic Pitch wrapper for audio → note events.
 import json
 import logging
 import math
-from numbers import Integral, Real
 import os
 from pathlib import Path
 import subprocess
 import tempfile
 from typing import List, Sequence, Tuple
-
-from app.services.tab_solver import MAX_PLAYABLE_MIDI, MIN_PLAYABLE_MIDI
 
 logger = logging.getLogger(__name__)
 
@@ -210,8 +207,7 @@ def _merge_same_pitch(notes: List[Tuple[float, float, int, float]],
 
 def transcribe_audio(audio_path: str, onset_threshold: float = 0.5,
                      frame_threshold: float = 0.3, min_note_length_ms: float = 50.0,
-                     min_midi: int = MIN_PLAYABLE_MIDI,
-                     max_midi: int = MAX_PLAYABLE_MIDI) -> List[Tuple[float, float, int, float]]:
+                     min_midi: int = 40, max_midi: int = 76) -> List[Tuple[float, float, int, float]]:
     """Run Basic Pitch on an audio file and return note events.
 
     Args:
@@ -220,35 +216,11 @@ def transcribe_audio(audio_path: str, onset_threshold: float = 0.5,
         frame_threshold: Basic Pitch frame confidence threshold
         min_note_length_ms: minimum note length in milliseconds, as expected by Basic Pitch
         min_midi: minimum MIDI pitch to keep (guitar low E = 40)
-        max_midi: maximum MIDI pitch to keep (high E string, fret 19 = 83)
+        max_midi: maximum MIDI pitch to keep (guitar high E = 76)
 
     Returns:
         List of (start_time, end_time, midi, confidence) tuples.
     """
-    for name, value in (
-        ("onset_threshold", onset_threshold),
-        ("frame_threshold", frame_threshold),
-    ):
-        if isinstance(value, bool) or not isinstance(value, Real) or not math.isfinite(value):
-            raise ValueError(f"{name} must be a finite number")
-        if not 0 <= value <= 1:
-            raise ValueError(f"{name} must be between 0 and 1")
-    if (
-        isinstance(min_note_length_ms, bool)
-        or not isinstance(min_note_length_ms, Real)
-        or not math.isfinite(min_note_length_ms)
-        or min_note_length_ms <= 0
-    ):
-        raise ValueError("min_note_length_ms must be a positive finite number")
-    if (
-        isinstance(min_midi, bool)
-        or isinstance(max_midi, bool)
-        or not isinstance(min_midi, Integral)
-        or not isinstance(max_midi, Integral)
-        or min_midi > max_midi
-    ):
-        raise ValueError("min_midi and max_midi must be ordered integers")
-
     # Basic Pitch imports a TF SavedModel loader by default on import in some versions.
     # Importing inside the function keeps startup fast when transcription is not needed.
     from basic_pitch.inference import predict
@@ -265,27 +237,7 @@ def transcribe_audio(audio_path: str, onset_threshold: float = 0.5,
     # note_events format: (start, end, pitch, confidence, bend_list)
     notes = []
     for event in note_events:
-        try:
-            if len(event) < 4:
-                raise ValueError
-            start, end = float(event[0]), float(event[1])
-            raw_pitch, confidence = event[2], float(event[3])
-        except (IndexError, TypeError, ValueError, OverflowError):
-            raise ValueError("Basic Pitch returned a malformed note event")
-        if (
-            not math.isfinite(start)
-            or not math.isfinite(end)
-            or not math.isfinite(confidence)
-            or start < 0
-            or end <= start
-            or not 0 <= confidence <= 1
-            or isinstance(raw_pitch, bool)
-            or not isinstance(raw_pitch, Real)
-            or not math.isfinite(raw_pitch)
-            or not float(raw_pitch).is_integer()
-        ):
-            raise ValueError("Basic Pitch returned an invalid note event")
-        pitch = int(raw_pitch)
+        start, end, pitch, confidence = event[0], event[1], int(event[2]), float(event[3])
         if min_midi <= pitch <= max_midi:
             notes.append((start, end, pitch, confidence))
 

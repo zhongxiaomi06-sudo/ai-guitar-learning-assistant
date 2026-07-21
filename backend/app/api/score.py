@@ -112,18 +112,7 @@ async def upload_score(
         result = db.execute(
             update(CourseModel)
             .where(CourseModel.id == course_id, score_match)
-            .values(
-                score_path=storage_path,
-                status="ready",
-                progress=100,
-                duration=course.duration or canonical_score.duration,
-                bpm=round(canonical_score.bpm),
-                time_signature=(
-                    f"{canonical_score.time_signature[0]}/"
-                    f"{canonical_score.time_signature[1]}"
-                ),
-                key=canonical_score.key,
-            ),
+            .values(score_path=storage_path, status="ready", progress=100),
             execution_options={"synchronize_session": "fetch"},
         )
         if result.rowcount != 1:

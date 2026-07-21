@@ -6,9 +6,12 @@ FastAPI entry point.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import courses, score
+from app.api import courses, practice, score
 from app.config import get_settings
 from app.database import Base, engine
+
+# Import all models so Base.metadata.create_all creates every table.
+from app.models import Course, PracticeResult  # noqa: F401
 
 settings = get_settings()
 cors_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
@@ -34,6 +37,7 @@ app.add_middleware(
 
 app.include_router(courses.router)
 app.include_router(score.router)
+app.include_router(practice.router)
 
 
 @app.get("/health")

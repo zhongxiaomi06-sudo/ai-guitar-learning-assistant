@@ -17,7 +17,9 @@ from app.config import get_settings
 from app.database import get_db
 from app.models.course import Course as CourseModel
 from app.schemas.course import CourseCreate, CourseResponse, CourseUpdate
+from app.services.quality_check import analyze_audio
 from app.services.storage import FileTooLargeError, InvalidStorageKeyError, StorageService, get_storage
+from app.services.transcription import extract_audio
 from app.tasks.transcribe import transcribe_course_task
 
 router = APIRouter(prefix="/api/v1/courses", tags=["courses"])
@@ -208,6 +210,43 @@ async def get_score(
         raise HTTPException(status_code=404, detail="Score file not found")
 
     return _storage_response(local_path, media_type="application/json")
+
+
+@router.post("/{course_id}/quality")
+async def check_quality(
+    course_id: str,
+    db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage),
+):
+    """Extract audio and report input quality for the uploaded video."""
+    course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+    if not course or not course.video_path:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    local_path = storage.get_path(course.video_path)
+    if not local_path:
+        raise HTTPException(status_code=404, detail="Video file not found")
+
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="guitar_quality_") as work_dir:
+        audio_path = f"{work_dir}/analysis.wav"
+        try:
+            extract_audio(local_path, audio_path, sample_rate=22050)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Audio extraction failed: {exc}",
+            ) from exc
+
+        ok, report = analyze_audio(audio_path)
+        # Store the report in course metadata so the UI can show it later.
+        metadata = dict(course.metadata_json or {})
+        metadata["quality_check"] = report
+        course.metadata_json = metadata
+        db.commit()
+        db.refresh(course)
+        return {"ok": ok, "report": report}
 
 
 @router.post(
