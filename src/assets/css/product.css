@@ -736,6 +736,7 @@ a:focus-visible {
 
 .back-link {
   align-self: start;
+  justify-self: start;
   min-height: 44px;
   color: var(--color-muted);
   font-size: 12px;
