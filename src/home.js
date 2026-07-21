@@ -1,12 +1,12 @@
 /**
  * home.js
- * 个人主页：上传视频、URL 抓取、演示课程、本地保存课程列表
+ * 个人主页：上传视频、URL 抓取、演示课程、后端 API 课程列表
  */
 
-import { local } from './shared/utils/storage.js';
-import { uid, formatTime } from './shared/utils/index.js';
+import { courses as api } from './shared/utils/api.js';
+import { formatTime } from './shared/utils/index.js';
 
-const COURSES_KEY = 'guitar-courses';
+const DEMO_COURSE_ID = '';
 
 /**
  * 生成课程封面缩略图（颜色渐变）
@@ -24,141 +24,72 @@ function generateThumbColor() {
 }
 
 /**
- * 从文件创建视频 URL
- * @param {File} file
- * @returns {string}
- */
-function createVideoUrl(file) {
-  return URL.createObjectURL(file);
-}
-
-/**
- * 创建课程对象
- * @param {object} data
- * @returns {object}
- */
-function createCourse(data) {
-  return {
-    id: uid('course'),
-    title: data.title || '未命名课程',
-    sourceUrl: data.sourceUrl || '',
-    localUrl: data.localUrl || '',
-    duration: data.duration || 0,
-    bpm: data.bpm || 0,
-    thumbColor: generateThumbColor(),
-    progress: 0,
-    status: 'ready',
-    lastPracticed: null,
-    createdAt: Date.now(),
-  };
-}
-
-/**
- * 加载课程列表
- * @returns {object[]}
- */
-function loadCourses() {
-  return local.get(COURSES_KEY, []);
-}
-
-/**
- * 保存课程列表
- * @param {object[]} courses
- */
-function saveCourses(courses) {
-  local.set(COURSES_KEY, courses);
-}
-
-/**
  * 渲染课程列表
  */
-function renderCourses() {
-  const courses = loadCourses();
+async function renderCourses() {
   const grid = document.getElementById('coursesGrid');
   const emptyState = document.getElementById('emptyState');
   const countEl = document.getElementById('courseCount');
 
-  if (countEl) {
-    countEl.textContent = `${courses.length} 个课程`;
-  }
-
   if (!grid) return;
 
-  if (courses.length === 0) {
-    grid.innerHTML = '';
-    emptyState.style.display = 'flex';
-    return;
-  }
+  try {
+    const courses = await api.list();
 
-  emptyState.style.display = 'none';
+    if (countEl) {
+      countEl.textContent = `${courses.length} 个课程`;
+    }
 
-  grid.innerHTML = courses.map((course) => `
-    <article class="course-card" data-id="${course.id}">
-      <div class="course-thumb" style="background: ${course.thumbColor}">
-        <div class="play-icon">▶</div>
-        ${course.duration ? `<span class="course-duration">${formatTime(course.duration)}</span>` : ''}
-      </div>
-      <div class="course-body">
-        <h3 class="course-title" title="${course.title}">${course.title}</h3>
-        <div class="course-meta">
-          <span>${course.bpm ? course.bpm + ' BPM' : 'BPM 未检测'}</span>
-          <span>·</span>
-          <span>${course.lastPracticed ? '最近练习' : '未练习'}</span>
+    if (courses.length === 0) {
+      grid.innerHTML = '';
+      emptyState.style.display = 'flex';
+      return;
+    }
+
+    emptyState.style.display = 'none';
+
+    grid.innerHTML = courses.map((course) => `
+      <article class="course-card" data-id="${course.id}">
+        <div class="course-thumb" style="background: ${generateThumbColor()}">
+          <div class="play-icon">▶</div>
+          ${course.duration ? `<span class="course-duration">${formatTime(course.duration)}</span>` : ''}
         </div>
-        <div class="course-progress">
-          <div class="progress-label">
-            <span>掌握进度</span>
-            <span>${course.progress}%</span>
+        <div class="course-body">
+          <h3 class="course-title" title="${course.title}">${course.title}</h3>
+          <div class="course-meta">
+            <span>${course.bpm ? course.bpm + ' BPM' : 'BPM 未检测'}</span>
+            <span>·</span>
+            <span>${course.status === 'ready' ? '可练习' : '处理中'}</span>
           </div>
-          <div class="progress-bar">
-            <div class="progress-fill" style="width: ${course.progress}%"></div>
+          <div class="course-progress">
+            <div class="progress-label">
+              <span>掌握进度</span>
+              <span>${course.progress}%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" style="width: ${course.progress}%"></div>
+            </div>
           </div>
+          <span class="course-status ${course.status === 'completed' ? 'completed' : 'ready'}">
+            ${course.status === 'completed' ? '已完成' : '可练习'}
+          </span>
         </div>
-        <span class="course-status ${course.status === 'completed' ? 'completed' : 'ready'}">
-          ${course.status === 'completed' ? '已完成' : '可练习'}
-        </span>
-      </div>
-    </article>
-  `).join('');
+      </article>
+    `).join('');
 
-  // 绑定点击事件
-  grid.querySelectorAll('.course-card').forEach((card) => {
-    card.addEventListener('click', () => {
-      const id = card.dataset.id;
-      window.location.href = `/index.html?course=${id}`;
+    grid.querySelectorAll('.course-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        const id = card.dataset.id;
+        window.location.href = `/index.html?course=${id}`;
+      });
     });
-  });
-}
-
-/**
- * 添加课程并保存
- * @param {object} data
- */
-function addCourse(data) {
-  const courses = loadCourses();
-  const course = createCourse(data);
-  courses.unshift(course);
-  saveCourses(courses);
-  renderCourses();
-  return course;
-}
-
-/**
- * 获取视频时长
- * @param {File} file
- * @returns {Promise<number>}
- */
-function getVideoDuration(file) {
-  return new Promise((resolve) => {
-    const video = document.createElement('video');
-    video.preload = 'metadata';
-    video.onloadedmetadata = () => {
-      URL.revokeObjectURL(video.src);
-      resolve(video.duration);
-    };
-    video.onerror = () => resolve(0);
-    video.src = URL.createObjectURL(file);
-  });
+  } catch (err) {
+    console.error('[Home] failed to load courses', err);
+    if (emptyState) {
+      emptyState.style.display = 'flex';
+      emptyState.textContent = '加载课程失败，请确认后端服务已启动';
+    }
+  }
 }
 
 /**
@@ -223,14 +154,14 @@ async function handleFileUpload(file) {
     return;
   }
 
-  const duration = await getVideoDuration(file);
-  const localUrl = createVideoUrl(file);
-
-  addCourse({
-    title: file.name.replace(/\.[^/.]+$/, ''),
-    localUrl,
-    duration,
-  });
+  try {
+    const title = file.name.replace(/\.[^/.]+$/, '');
+    const course = await api.upload(file, title);
+    window.location.href = `/index.html?course=${course.id}`;
+  } catch (err) {
+    console.error('[Home] upload failed', err);
+    alert('上传失败：' + err.message);
+  }
 }
 
 /**
@@ -238,12 +169,13 @@ async function handleFileUpload(file) {
  * @param {string} url
  */
 async function handleUrlUpload(url) {
-  // TODO: 后端抓取后替换为真实 URL
-  addCourse({
-    title: `链接课程 ${new Date().toLocaleTimeString()}`,
-    sourceUrl: url,
-    duration: 0,
-  });
+  try {
+    const course = await api.fromUrl(url, `链接课程 ${new Date().toLocaleTimeString()}`);
+    window.location.href = `/index.html?course=${course.id}`;
+  } catch (err) {
+    console.error('[Home] URL upload failed', err);
+    alert('URL 提交失败：' + err.message);
+  }
 }
 
 /**
@@ -252,13 +184,21 @@ async function handleUrlUpload(url) {
 function initDemoCourses() {
   const demoCards = document.querySelectorAll('.demo-card');
   demoCards.forEach((card) => {
-    card.addEventListener('click', () => {
-      addCourse({
-        title: '入门练习曲',
-        sourceUrl: '',
-        duration: 45,
-        bpm: 120,
-      });
+    card.addEventListener('click', async () => {
+      if (DEMO_COURSE_ID) {
+        window.location.href = `/index.html?course=${DEMO_COURSE_ID}`;
+        return;
+      }
+      try {
+        const courses = await api.list();
+        if (courses.length > 0) {
+          window.location.href = `/index.html?course=${courses[0].id}`;
+        } else {
+          alert('暂无演示课程，请先上传视频');
+        }
+      } catch (err) {
+        alert('加载演示课程失败');
+      }
     });
   });
 }

@@ -14,10 +14,10 @@
 
 ## 当前状态
 
-**阶段**：后端第一步已完成（FastAPI + SQLite/PostgreSQL + 本地文件存储），下一步接入真实 DEMO 视频与谱面数据  
-**技术栈**：前端 Vite + 原生 JS；后端 FastAPI + SQLAlchemy + 本地/MinIO 存储 + PostgreSQL（Docker）  
+**阶段**：后端第一步已完成，Bilibili 演示视频已下载并上传后端，demo_score.json 已生成并上传，前端已从 localStorage 切换到后端 API  
+**技术栈**：前端 Vite + 原生 JS；后端 FastAPI + SQLAlchemy + 本地文件存储  
 **基础构建工具**：Vite（前端）、Uvicorn（后端）  
-**最近更新**：2026-07-21 — 完成后端最小 API：课程上传、列表、详情、视频/谱面服务。
+**最近更新**：2026-07-21 — 接入真实 DEMO 视频与谱面数据，前端改为从后端 API 加载。
 
 ## 项目定位
 
@@ -98,13 +98,16 @@ guitar/
 - [x] 后端第一步：FastAPI 最小 API（课程上传/列表/详情/视频/谱面）
 - [x] 后端本地 SQLite + 本地文件存储（可切换 PostgreSQL + MinIO）
 - [x] 后端 docker-compose.yml 与 Dockerfile
+- [x] 下载 Bilibili 演示视频并裁剪为 60 秒
+- [x] 为演示视频生成 demo_score.json（手工和弦谱面）
+- [x] 上传演示视频与谱面到后端 API
+- [x] 前端从后端 API 加载课程（替代 localStorage）
 
 ## 待办
 
-- [ ] 接入真实 DEMO 视频与谱面数据
-- [ ] 前端从后端 API 加载课程（替代 localStorage）
-- [ ] 实时音高检测实现
+- [ ] 实时音高检测与谱面对齐
 - [ ] 自适应练习策略（调速/循环）完整实现
+- [ ] 后端异步解析流水线（FFmpeg + Basic Pitch）
 
 ## 未决事项
 
