@@ -198,7 +198,9 @@ def build_score(
     beats_per_bar, beat_unit = _validate_time_signature(time_signature)
     normalized_notes = _normalize_solved_notes(solved_notes)
     note_end = max((note["end"] for note in normalized_notes), default=0.0)
-    effective_duration = max(normalized_duration, note_end)
+    if normalized_duration > 0 and note_end > normalized_duration:
+        raise ValueError("a solved note extends beyond the declared media duration")
+    effective_duration = normalized_duration if normalized_duration > 0 else note_end
     if effective_duration > MAX_SCORE_DURATION_SECONDS:
         raise ValueError(f"score duration must not exceed {MAX_SCORE_DURATION_SECONDS:g} seconds")
 

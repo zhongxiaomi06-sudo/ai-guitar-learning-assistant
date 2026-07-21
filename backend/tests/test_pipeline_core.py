@@ -193,6 +193,14 @@ def test_score_builder_derives_duration_and_emits_strict_frontend_json():
     json.dumps(built, allow_nan=False)
 
 
+def test_score_builder_does_not_extend_a_trusted_media_duration():
+    with pytest.raises(ValueError, match="declared media duration"):
+        score(
+            duration=1.0,
+            solved_notes=[note(start=0.9, end=1.1)],
+        )
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [

@@ -4,6 +4,7 @@ End-to-end audio → Score JSON pipeline.
 """
 
 import logging
+import math
 import os
 import shutil
 import tempfile
@@ -12,7 +13,7 @@ from typing import Any, Dict, Optional
 from app.config import get_settings
 from app.services.pipeline_errors import InputQualityError, ScoreQualityError
 from app.services.quality_check import analyze_audio
-from app.services.score_builder import build_score
+from app.services.score_builder import MAX_SCORE_DURATION_SECONDS, build_score
 from app.services.score_quality import validate_score_quality
 from app.services.storage import StorageService, get_storage
 from app.services.tab_solver import solve_notes
@@ -55,7 +56,7 @@ class AudioPipeline:
     def run(
         self,
         video_path: str,
-        title: str = "",
+        title: str = "Untitled",
         source_video_url: str = "",
         duration: float = 0.0,
         bpm: int = 0,
@@ -69,7 +70,7 @@ class AudioPipeline:
             video_path: path to the input video
             title: song/course title
             source_video_url: original source URL
-            duration: video duration (used for bar splitting)
+            duration: video duration (used for bar splitting); 0 triggers probing
             bpm: BPM for bar quantization; 0 triggers auto-detection
             time_signature: e.g. [4, 4]; None triggers auto-detection
             key: musical key
@@ -90,12 +91,22 @@ class AudioPipeline:
         try:
             os.makedirs(work_dir, exist_ok=True)
 
+            # Duration probing belongs inside the cleanup boundary: malformed
+            # media must not leak a newly created pipeline directory.
+            if (
+                isinstance(duration, bool)
+                or not isinstance(duration, (int, float))
+                or not math.isfinite(duration)
+            ):
+                raise ValueError("duration must be a finite number")
             if duration <= 0:
                 duration = get_video_duration(video_path)
             if duration < 1.0:
                 raise InputQualityError("视频时长不足 1 秒，无法解析")
-            if duration > 600.0:
-                raise InputQualityError("视频时长超过 10 分钟，请先截取片段")
+            if duration > MAX_SCORE_DURATION_SECONDS:
+                raise InputQualityError(
+                    f"视频时长超过 {MAX_SCORE_DURATION_SECONDS:g} 秒，请先截取片段"
+                )
 
             audio_path = os.path.join(work_dir, "analysis.wav")
             extract_audio(video_path, audio_path, sample_rate=22050)
@@ -107,6 +118,20 @@ class AudioPipeline:
                 raise InputQualityError(f"输入音频质量不足：{reasons}")
 
             note_events = transcribe_audio(audio_path)
+            # Model frames can extend a fraction beyond the media boundary.
+            # The video duration is authoritative, so trim that tail rather
+            # than extending the score and desynchronizing playback.
+            bounded_note_events = []
+            for start, end, midi, confidence in note_events:
+                bounded_end = min(end, duration)
+                if start < duration and bounded_end > start:
+                    bounded_note_events.append((start, bounded_end, midi, confidence))
+            if len(bounded_note_events) != len(note_events):
+                logger.info(
+                    "Dropped %d transcription events outside the media timeline",
+                    len(note_events) - len(bounded_note_events),
+                )
+            note_events = bounded_note_events
             logger.info("Transcribed %d notes", len(note_events))
 
             if not note_events:
@@ -230,7 +255,7 @@ class AudioPipeline:
         with tempfile.TemporaryDirectory(prefix="guitar_score_") as score_dir:
             score_path_local = os.path.join(score_dir, score_key)
             with open(score_path_local, "w", encoding="utf-8") as score_file:
-                json.dump(score, score_file, ensure_ascii=False)
+                json.dump(score, score_file, ensure_ascii=False, allow_nan=False)
 
             with open(score_path_local, "rb") as score_file:
                 storage_path = self.storage.save(

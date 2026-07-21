@@ -24,13 +24,15 @@
 
 - FFmpeg 从视频提取单声道 22050 Hz WAV：`ffmpeg -i input.mp4 -vn -ac 1 -ar 22050 analysis.wav`
 - 通过 `ffprobe` 读取视频时长
+- 在进入音频提取和模型推理前拒绝超过 10 分钟的媒体
+- 媒体命令异常不记录完整输入 URL，避免泄露对象存储签名参数
 
 ### 2. Basic Pitch 转录
 
 - `basic-pitch` 0.4.0 当前通过包默认模型推理；Linux 安装可能包含 TensorFlow，不能宣称仅依赖 ONNX
 - 可调参数：`onset_threshold` / `frame_threshold` / `minimum_note_length`（毫秒）
 - 输出 note events：`(start, end, pitch, confidence)`
-- 过滤非吉他音区（默认 MIDI 40–76）
+- 过滤非吉他音区（标准调弦 19 品，默认 MIDI 40–83）
 - 合并同音高碎音符、删除过短噪声（< 80 ms）
 
 ### 3. 弦品求解
@@ -46,6 +48,7 @@
 ### 4. 谱面生成
 
 - 根据 BPM 和拍号切分小节/拍
+- BPM 可由调用方显式指定（`--bpm 72`），也可留 0 让 `tempo.py` 自动估计；拍号默认为 4/4，调性默认 C
 - 将音符分配到起始拍
 - 同弦同品重叠/相邻音符合并，减少重复检测
 - 输出 Canonical Score JSON：`{id, title, sourceVideoUrl, duration, bpm, timeSignature, key, bars}`
@@ -70,3 +73,5 @@ python scripts/run_pipeline.py storage/videos/bcf4b374c965.mp4 `
 - [x] 后端 API 触发流水线（`AudioPipeline.process_course`）
 - [ ] 人工校对/后编辑 UI
 - [ ] 更高级的多声部分离（vocal / guitar 分离）
+- [ ] 用 Celery/RQ 等持久任务队列替换进程内 `BackgroundTasks`
+- [ ] 接入更稳定的调性估计，替换默认调性元数据

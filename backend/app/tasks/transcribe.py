@@ -30,6 +30,9 @@ def transcribe_course_task(course_id: str):
             user_message = exc.user_message
 
         try:
+            # A manual score upload (or a newer task) may have completed while
+            # this worker was running. Only the task that still owns the
+            # processing state may turn it into an error.
             course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
             if course and course.status == "processing":
                 metadata = dict(course.metadata_json or {})
@@ -56,11 +59,12 @@ def transcribe_course_task(course_id: str):
                 course_id,
             )
 
+        # Do not emit exception messages or command lines: media sources can
+        # be short-lived object-storage URLs containing signed query strings.
         logger.error(
-            "Audio-to-tab pipeline failed for course %s (%s: %s)",
+            "Audio-to-tab pipeline failed for course %s (%s)",
             course_id,
-            error_code,
-            user_message,
+            type(exc).__name__,
         )
     finally:
         db.close()
