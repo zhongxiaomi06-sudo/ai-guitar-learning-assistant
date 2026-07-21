@@ -316,6 +316,62 @@ def test_quality_check_rejects_silent_audio(tmp_path):
     assert report["duration_seconds"] == 1.0
 
 
+def test_segment_progress_is_persisted_in_course_metadata(client, db_session):
+    course = CourseModel(id="seg-progress-course", title="Segment progress test", video_path="videos/x.mp4")
+    db_session.add(course)
+    db_session.commit()
+
+    response = client.post("/api/v1/courses/seg-progress-course/segments/seg_01/progress?status=practicing")
+    assert response.status_code == 200
+    assert response.json()["status"] == "practicing"
+
+    response = client.get("/api/v1/courses/seg-progress-course/segments/seg_01/progress")
+    assert response.status_code == 200
+    assert response.json()["status"] == "practicing"
+
+    # Verify it is also in the course metadata.
+    course = db_session.query(CourseModel).filter(CourseModel.id == "seg-progress-course").first()
+    assert course.metadata_json["segment_progress"]["seg_01"]["status"] == "practicing"
+
+
+def test_weak_spots_endpoint_aggregates_errors(client, db_session):
+    course = CourseModel(id="weak-course", title="Weak spots test", video_path="videos/x.mp4")
+    db_session.add(course)
+    db_session.commit()
+
+    for event_id in ["evt_1", "evt_1", "evt_2"]:
+        client.post("/api/v1/practice/results", json={
+            "course_id": "weak-course",
+            "target_event_id": event_id,
+            "result_type": "miss" if event_id == "evt_2" else "wrong-pitch",
+        })
+    client.post("/api/v1/practice/results", json={
+        "course_id": "weak-course",
+        "target_event_id": "evt_3",
+        "result_type": "correct",
+    })
+
+    response = client.get("/api/v1/practice/weak-spots/weak-course")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 4
+    assert data["accuracy"] == 0.25
+    assert len(data["top_error_types"]) >= 1
+    assert data["weak_events"][0]["event_id"] == "evt_1"
+
+
+def test_weak_spots_returns_empty_summary_for_no_results(client, db_session):
+    course = CourseModel(id="empty-weak-course", title="Empty weak spots", video_path="videos/x.mp4")
+    db_session.add(course)
+    db_session.commit()
+
+    response = client.get("/api/v1/practice/weak-spots/empty-weak-course")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 0
+    assert data["weak_events"] == []
+
+
 def test_quality_check_accepts_normal_audio(tmp_path):
     # Create a 1-second sine-ish loud WAV.
     import math

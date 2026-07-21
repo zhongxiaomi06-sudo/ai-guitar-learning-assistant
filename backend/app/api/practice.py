@@ -3,6 +3,7 @@ api/practice.py
 Endpoints for practice results, segments, and the unified timeline.
 """
 
+import time
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,6 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.course import Course as CourseModel
 from app.models.practice_result import PracticeResult as PracticeResultModel
 from app.schemas.practice_result import (
     PracticeResultCreate,
@@ -19,6 +21,7 @@ from app.schemas.practice_result import (
 from app.services.segments import get_segments
 from app.services.storage import StorageService, get_storage
 from app.services.timeline import get_timeline
+from app.services.weak_spots import PracticeResultAggregator
 
 router = APIRouter(prefix="/api/v1", tags=["practice"])
 
@@ -153,3 +156,60 @@ async def get_practice_summary(
         accuracy=round(accuracy, 4),
         average_timing_offset_ms=round(avg_timing * 1000, 2),
     )
+
+
+@router.get("/practice/weak-spots/{course_id}")
+async def get_weak_spots(
+    course_id: str,
+    session_id: str = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Return aggregated weak spots for a course or session."""
+    aggregator = PracticeResultAggregator(db, course_id, session_id=session_id)
+    return aggregator.summary()
+
+
+@router.post("/courses/{course_id}/segments/{segment_id}/progress")
+async def update_segment_progress(
+    course_id: str,
+    segment_id: str,
+    status: str = Query(..., pattern=r"^(locked|practicing|passed)$"),
+    db: Session = Depends(get_db),
+):
+    """Persist a segment's progress status on the course metadata.
+
+    For MVP the segment states are stored inside `course.metadata_json` so the
+    frontend can read them from the course detail response without a separate
+    segment table. A future version may normalize this into a dedicated table.
+    """
+    course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    metadata = dict(course.metadata_json or {})
+    segment_progress = dict(metadata.get("segment_progress", {}))
+    segment_progress[segment_id] = {
+        "status": status,
+        "updated_at": int(time.time() * 1000),
+    }
+    metadata["segment_progress"] = segment_progress
+    course.metadata_json = metadata
+    db.commit()
+    db.refresh(course)
+    return {"segment_id": segment_id, "status": status}
+
+
+@router.get("/courses/{course_id}/segments/{segment_id}/progress")
+async def get_segment_progress(
+    course_id: str,
+    segment_id: str,
+    db: Session = Depends(get_db),
+):
+    """Return the persisted progress status for a single segment."""
+    course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    metadata = dict(course.metadata_json or {})
+    progress = metadata.get("segment_progress", {})
+    return progress.get(segment_id, {"status": "locked"})

@@ -134,6 +134,20 @@ class Course(Base):
 - `POST /api/v1/practice/results` — 提交一次练习检测事件。
 - `GET /api/v1/practice/results` — 查询练习事件。
 - `GET /api/v1/practice/summary/{course_id}` — 汇总正确率、节奏偏差等统计。
+- `GET /api/v1/practice/weak-spots/{course_id}` — 聚合薄弱小节/事件。
+- `POST /api/v1/courses/{id}/segments/{segment_id}/progress` — 更新片段状态。
+- `GET /api/v1/courses/{id}/segments/{segment_id}/progress` — 查询片段状态。
+
+### 4.1 解析流水线行为
+
+- `POST /api/v1/courses/{id}/parse` 会异步执行以下步骤：
+  1. 提取音频并检查时长（< 1 秒或 > 10 分钟会失败）。
+  2. 检查音频质量：无音轨/静音、音量过低、噪声过高会失败并记录原因。
+  3. 自动检测 BPM 与拍号（若课程未设置 BPM）。
+  4. 用 Basic Pitch 转录音符，求解弦位，生成 Canonical Score JSON。
+  5. 验证谱面质量：音符数、把位合理性、时长匹配。
+  6.  transient 失败（如 FFmpeg / Basic Pitch 偶发错误）会自动重试。
+- 失败时课程状态变为 `error`，`metadata_json.last_error` 包含可展示给用户的原因。
 
 ### 5. 第一阶段不做的
 
@@ -154,33 +168,35 @@ class Course(Base):
 
 **注意**：`backend/storage/` 被 `.gitignore` 排除。开发者本地曾使用过的媒体文件不会随 clone 获得，也不应在没有授权说明时要求其他人从第三方平台重新下载。
 
-## 第三阶段：异步解析流水线（3–5 天）
+## 第三阶段：异步解析流水线（已完成）
 
 目标：让用户上传任意吉他视频后，后端能自动生成谱面。
 
+当前已实现：
+
 ```text
-上传视频 → FFmpeg 提取音频 → Basic Pitch → 弦品求解 → 小节/拍号量化 → Score JSON
+上传视频 → FFmpeg 提取音频 → 输入质量检查 → 自动 BPM/拍号 → Basic Pitch → 弦品求解 → 小节量化 → 谱面质量验收 → Score JSON
 ```
 
 步骤：
 
-1. 接入 Celery + Redis，把解析任务异步化。
-2. 写 `tasks/transcribe.py`：
-   - `ffmpeg -i input.mp4 -vn -ac 1 -ar 22050 analysis.wav`
-   - `basic-pitch ./output ./analysis.wav`
-   - 读取 MIDI 和 note_events CSV。
-3. 写 `services/tab_solver.py`：把 MIDI 音高映射到吉他弦品，输出候选。
-4. 写 `services/score_builder.py`：生成 `Canonical Score JSON`。
-5. 解析完成后更新 `Course.status = "ready"`。
+1. ✅ 用 `BackgroundTasks` 异步化解析任务（Celery/Redis 列为 P1）。
+2. ✅ 写 `tasks/transcribe.py`：执行流水线并记录失败状态与原因。
+3. ✅ 写 `services/tab_solver.py`：把 MIDI 音高映射到吉他弦品，输出候选。
+4. ✅ 写 `services/score_builder.py`：生成 `Canonical Score JSON`。
+5. ✅ 解析完成后更新 `Course.status = "ready"` 或 `"error"`。
+6. ✅ 输入质量检查、自动 BPM/拍号、解析重试、谱面质量验收。
 
-## 第四阶段：与前端实时链路打通（2–3 天）
+## 第四阶段：与前端实时链路打通（部分完成）
 
-目标：前端在播放视频时，后端提供精确时间轴对齐。
+目标：前端在播放视频时，后端提供精确时间轴对齐，前端用麦克风实时检测并比对。
 
-1. 后端提供 `GET /api/v1/courses/{id}/timeline`：包含音符、和弦、事件、视频时间戳。
-2. 前端用 `requestAnimationFrame` + 视频 `currentTime` 驱动谱面滚动。
-3. 前端用 Web Audio API 采集麦克风，实时检测音高，与目标谱面对比。
-4. 后端不参与实时评分，只提供目标数据。
+1. ✅ 后端提供 `GET /api/v1/courses/{id}/timeline`：包含音符、和弦、事件、视频时间戳。
+2. ✅ 后端提供 `GET /api/v1/courses/{id}/segments`：练习片段与达标条件。
+3. ✅ 后端提供 `POST /api/v1/practice/results`：保存实时检测事件。
+4. ✅ 后端提供 `GET /api/v1/practice/weak-spots/{course_id}`：聚合薄弱小节。
+5. ⏳ 前端用 `requestAnimationFrame` + 视频 `currentTime` 驱动谱面滚动。
+6. ⏳ 前端用 Web Audio API 采集麦克风，实时检测音高，与目标谱面对比。
 
 ## 已决策事项
 

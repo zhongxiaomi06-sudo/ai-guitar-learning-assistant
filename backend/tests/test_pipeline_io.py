@@ -16,9 +16,33 @@ def test_local_pipeline_run_does_not_initialize_configured_storage(monkeypatch):
     def unexpected_storage_init():
         raise AssertionError("run-only pipeline must not initialize storage")
 
+    def fake_analyze_audio(audio_path, sample_rate=22050):
+        return True, {
+            "ok": True,
+            "messages": ["音频质量正常。"],
+            "has_audio": True,
+            "duration_seconds": 1.0,
+            "rms_db": -20.0,
+            "peak_db": -10.0,
+            "noise_floor_db": -80.0,
+            "snr_db": 60.0,
+        }
+
     monkeypatch.setattr(audio_pipeline, "get_storage", unexpected_storage_init)
     monkeypatch.setattr(audio_pipeline, "extract_audio", lambda *args, **kwargs: None)
-    monkeypatch.setattr(audio_pipeline, "transcribe_audio", lambda *args, **kwargs: [])
+    monkeypatch.setattr(audio_pipeline, "analyze_audio", fake_analyze_audio)
+    # Provide note events so the pipeline produces a usable score without
+    # falling back to librosa beat tracking on the mocked audio file.
+    monkeypatch.setattr(
+        audio_pipeline,
+        "transcribe_audio",
+        lambda *args, **kwargs: [
+            (0.0, 0.15, 64, 0.9),
+            (0.2, 0.35, 62, 0.9),
+            (0.4, 0.55, 60, 0.9),
+            (0.6, 0.75, 59, 0.9),
+        ],
+    )
 
     score = audio_pipeline.AudioPipeline().run(
         video_path="input.mp4",

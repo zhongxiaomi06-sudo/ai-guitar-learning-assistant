@@ -25,7 +25,7 @@ def main():
     parser = argparse.ArgumentParser(description="Audio to tab pipeline")
     parser.add_argument("video", help="Path to input video")
     parser.add_argument("--title", default="Untitled", help="Song title")
-    parser.add_argument("--bpm", type=int, default=72, help="BPM")
+    parser.add_argument("--bpm", type=int, default=0, help="BPM (0 for auto-detection)")
     parser.add_argument("--key", default="C", help="Musical key")
     parser.add_argument("--time-signature", default="4/4", help="Time signature, e.g. 4/4")
     parser.add_argument("--output", "-o", default="output_score.json", help="Output JSON path")
@@ -35,8 +35,8 @@ def main():
     video_path = Path(args.video).expanduser().resolve()
     if not video_path.is_file():
         parser.error(f"video does not exist or is not a file: {video_path}")
-    if args.bpm <= 0:
-        parser.error("--bpm must be a positive integer")
+    if args.bpm < 0:
+        parser.error("--bpm must be a non-negative integer (0 for auto-detection)")
     try:
         signature_parts = args.time_signature.split("/")
         if len(signature_parts) != 2:
