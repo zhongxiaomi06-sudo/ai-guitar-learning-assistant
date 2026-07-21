@@ -112,16 +112,14 @@ class AudioPipeline:
             if not note_events:
                 raise InputQualityError("未识别到任何吉他音符，请确认视频包含清晰的吉他声音")
 
-            # Auto-detect BPM/time signature unless explicitly provided.
-            if bpm <= 0 or time_signature == [4, 4]:
+            # Auto-detect BPM and time signature only when not explicitly provided.
+            if bpm <= 0:
                 detected_bpm, detected_ts = estimate_tempo(
                     note_events=note_events,
                     audio_path=audio_path,
                 )
-                if bpm <= 0:
-                    bpm = detected_bpm
-                if time_signature == [4, 4]:
-                    time_signature = list(detected_ts)
+                bpm = detected_bpm
+                time_signature = list(detected_ts)
 
             solved_notes = solve_notes(note_events)
             logger.info("Solved %d notes to strings/frets", len(solved_notes))
