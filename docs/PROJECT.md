@@ -1143,7 +1143,7 @@ PassCriteria {
 3. 音频处理库与音高检测算法。
 4. DEMO 视频与预精修谱面数据。
 5. 视频自动抓取的合规与版权处理。
-6. 旧 H5 架构文件（`src/assets/js/*`、`src/pages/*`）是否清理。
+6. 旧 H5 架构文件（`src/assets/js/*`、`src/pages/*`、`src/components/*`）已清理。
 
 ---
 

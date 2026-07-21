@@ -6,7 +6,7 @@
 
 ## 当前项目状态
 
-- 前端已可跑：`home.html`（上传/URL/演示课程） + `index.html`（执行页）+ `rhythm-demo.html`（音游模拟）。
+- 前端已可跑：`home.html`（上传/URL/演示课程） + `index.html`（执行页，含音游模式）。
 - 数据目前全在 `localStorage`，没有持久化。
 - `VideoFetcher.fromURL()` 和 `handleUrlUpload()` 是空实现，等待后端。
 - 谱面数据为硬编码，没有真实 DEMO 数据。

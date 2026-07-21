@@ -35,7 +35,9 @@
 .
 ├── docs/
 │   ├── PROJECT.md          # 完整产品文档
-│   └── PROGRESS.md         # 项目进度
+│   ├── PROGRESS.md         # 项目进度
+│   ├── BACKEND_START.md    # 后端起步方案
+│   └── TECHNICAL_RESEARCH.md  # 技术栈调研
 ├── public/                 # 静态资源
 ├── src/
 │   ├── main.js             # 执行页入口
@@ -53,7 +55,6 @@
 │   └── assets/             # CSS、图片、字体
 ├── index.html              # 执行页（跟练）
 ├── home.html               # 个人主页（上传 + 我的课程）
-├── rhythm-demo.html        # 独立音游模式模拟效果
 ├── vite.config.js
 ├── package.json
 └── README.md
@@ -84,17 +85,7 @@
 | 建议面板 | 实时反馈、下一步提示、准确率/连击/小节 |
 | 设置浮窗 | 可折叠悬浮窗：速度、难度、判定偏移、自动调速、输入设备 |
 
-### 3. 音游模式模拟（`rhythm-demo.html`）
-
-独立演示文件，用于快速审查音游效果：
-
-- 音符从右向左流动
-- 可调整流速、BPM、判定偏移
-- 支持键盘/鼠标/触摸击打
-- 自动演示模式
-- 实时 Perfect / Good / Miss 判定与粒子反馈
-
----
+匹配面板内置音游模式：音符从右向左流动，6 根弦对应 6 条水平车道；音符到达左侧判定线时，按数字键 1–6 或点击/触摸对应车道；判定结果实时显示 Perfect / Good / Miss、粒子爆炸与连击。
 
 ## 核心前端特性
 
@@ -148,8 +139,7 @@ npm run lint
 开发服务器启动后：
 
 - 个人主页：`http://localhost:3000/home.html`
-- 执行页：`http://localhost:3000/index.html`
-- 音游模拟：`http://localhost:3000/rhythm-demo.html`
+- 执行页：`http://localhost:3000/index.html`（含音游模式）
 
 ---
 
@@ -161,7 +151,7 @@ npm run lint
 - `home.html` — 个人主页
 - `assets/` — JS / CSS 打包文件
 
-> `rhythm-demo.html` 为独立文件，不经过 Vite 打包，可直接用浏览器打开。
+> `index.html` 与 `home.html` 均经过 Vite 打包，输出到 `dist/` 目录。
 
 ---
 
