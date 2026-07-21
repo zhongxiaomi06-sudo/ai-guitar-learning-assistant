@@ -34,6 +34,7 @@
 | 音频处理 | FFmpeg + Web Audio API（前端 YIN） |
 | 部署 | Docker Compose（可选） |
 
+> **当前阶段说明**：后端已接入，前端从后端 API 加载课程、视频与谱面；音游模式判定基于麦克风音频输入，但音符仍为随机生成，尚未被后端谱面数据驱动。`src/app.js` 与 `src/ui-demo.js` 两套前端系统正在整合中。
 ---
 
 ## 目录结构
@@ -147,9 +148,16 @@ uvicorn app.main:app --reload  # http://localhost:8000
 - 文档：`http://localhost:8000/docs`
 - 健康检查：`GET /health`
 - 课程列表：`GET /api/v1/courses`
+- 课程详情：`GET /api/v1/courses/{id}`
 - 上传视频：`POST /api/v1/courses/upload` (multipart/form-data: title, video)
+- 提交 URL：`POST /api/v1/courses/from-url` (JSON: title, source_url)
+- 更新课程：`PATCH /api/v1/courses/{id}`
+- 删除课程：`DELETE /api/v1/courses/{id}`
 - 课程视频流：`GET /api/v1/courses/{id}/video`
 - 课程谱面：`GET /api/v1/courses/{id}/score`
+- 上传谱面：`POST /api/v1/courses/{id}/score` (multipart/form-data: score)
+
+> 演示课程（Bilibili《拥抱》60 秒裁剪版）需在后端本地生成，媒体文件不纳入版本控制。详见 `docs/BACKEND_START.md` 第二阶段。
 
 ---
 
@@ -173,8 +181,10 @@ uvicorn app.main:app --reload  # http://localhost:8000
 ## 项目文档
 
 - 完整产品文档：`docs/PROJECT.md`
+- 后端起步方案：`docs/BACKEND_START.md`
+- 技术栈调研：`TECHNICAL_RESEARCH.md`
+- 音频转谱流水线：`docs/AUDIO_TO_TAB_PIPELINE.md`
 - 项目进度：`docs/PROGRESS.md`
-- 原始 PRD：`CLAUDE.md`
 
 ---
 

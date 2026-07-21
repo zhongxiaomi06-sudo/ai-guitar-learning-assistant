@@ -910,7 +910,7 @@ PassCriteria {
 ┌──────────────────────────▼──────────────────────────────────┐
 │                      数据层                                │
 │  Course / Measure / PerformanceEvent / PracticeResult /      │
-│  PracticeSegment / IndexedDB / 本地文件                      │
+│  PracticeSegment / SQLite / 本地文件                         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -1136,27 +1136,35 @@ PassCriteria {
 
 ---
 
-## 16. 未决事项
+## 16. 已决策与未决事项
 
-1. 前端框架选择（原生 JS / Vue / React / Svelte）。
-2. 是否需要后端服务（视频抓取、音频处理）。
-3. 音频处理库与音高检测算法。
-4. DEMO 视频与预精修谱面数据。
-5. 视频自动抓取的合规与版权处理。
-6. 旧 H5 架构文件（`src/assets/js/*`、`src/pages/*`、`src/components/*`）已清理。
+### 已决策
+
+1. **前端技术栈**：保留 Vite + 原生 JavaScript，未来可视情况升级到 React/Next.js。
+2. **后端服务**：采用 FastAPI + Python 3.11，数据库默认 SQLite（本地开发），生产可切换 PostgreSQL；存储默认本地文件系统，生产可切换 MinIO/S3。
+3. **旧 H5 架构文件**：`src/assets/js/*`、`src/pages/*`、`src/components/*` 已清理完成。
+
+### 未决
+
+1. 视频自动抓取的合规与版权处理（当前仅记录 URL，不自动下载）。
+2. AI 扒谱最终技术栈（Basic Pitch 为候选，需在 Python 3.10 环境验证并集成）。
 
 ---
 
 ## 17. 参考文档
 
-- `CLAUDE.md`：原始完整 PRD，包含详细产品需求、验收标准、路演方案。
+- `docs/PROJECT.md`：本文件，产品需求总纲。
 - `docs/PROGRESS.md`：项目进度与任务拆分。
-- 当前项目代码：`src/` 目录下的核心模块与五面板实现。
+- `docs/BACKEND_START.md`：后端起步与阶段划分。
+- `docs/TECHNICAL_RESEARCH.md`：技术栈调研与 AI pipeline 架构。
+- `docs/AUDIO_TO_TAB_PIPELINE.md`：音频 → 六线谱具体实现步骤。
+- 当前项目代码：`src/` 与 `backend/` 目录下的实现。
 
 ---
 
 ## 18. 下一步
 
-1. 确认前端框架与技术栈。
-2. 提供 DEMO 视频。
-3. 开始实现 P0 路演闭环：视频导入 → 谱面加载 → 对齐 → 五面板跟练 → 实时检测 → 纠错 → 恢复速度 → 完成页。
+1. 将后端谱面数据真正驱动音游模式，替换随机音符。
+2. 整合 `src/app.js` 与 `src/ui-demo.js`，让正式架构驱动 UI。
+3. 实现视频-谱面时间轴对齐与播放光标同步。
+4. 开始实现 P0 路演闭环：视频导入 → 谱面加载 → 对齐 → 五面板跟练 → 实时检测 → 纠错 → 恢复速度 → 完成页。

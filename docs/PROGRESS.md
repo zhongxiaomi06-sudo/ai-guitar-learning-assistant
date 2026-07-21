@@ -14,10 +14,10 @@
 
 ## 当前状态
 
-**阶段**：后端第一步已完成，Bilibili 演示视频已下载并上传后端，demo_score.json 已生成并上传，前端已从 localStorage 切换到后端 API  
+**阶段**：后端第一步已完成，Bilibili 演示视频已下载并上传后端，demo_score.json 已生成并上传，前端已从 localStorage 切换到后端 API；当前最大 Gap 是谱面数据尚未驱动音游模式，存在 `app.js` 与 `ui-demo.js` 两套并行前端系统  
 **技术栈**：前端 Vite + 原生 JS；后端 FastAPI + SQLAlchemy + 本地文件存储  
 **基础构建工具**：Vite（前端）、Uvicorn（后端）  
-**最近更新**：2026-07-21 — 接入真实 DEMO 视频与谱面数据，前端改为从后端 API 加载。
+**最近更新**：2026-07-21 — 文档全面回顾与更新，移除未使用文件，记录当前技术决策。
 
 ## 项目定位
 
@@ -88,7 +88,6 @@ guitar/
 - [x] 音游模式判定改为麦克风音频输入（YIN 音高检测），键盘仅作调试开关
 - [x] 设置区改为可折叠悬浮窗
 - [x] 个人主页：本地上传、URL 抓取、演示课程
-- [x] 课程自动保存到 localStorage
 - [x] 主页与执行页导航联动（通过 `?course=ID` 传参）
 - [x] `README.md` 前端说明文档
 - [x] 本地 Git 初始化并提交
@@ -102,24 +101,26 @@ guitar/
 - [x] 为演示视频生成 demo_score.json（手工和弦谱面）
 - [x] 上传演示视频与谱面到后端 API
 - [x] 前端从后端 API 加载课程（替代 localStorage）
+- [x] 移除未使用的 localStorage 工具与同步模块
 
 ## 待办
 
+- [ ] 将谱面数据真正驱动音游模式音符生成
+- [ ] 整合 `app.js` 与 `ui-demo.js`，消除两套并行前端系统
 - [ ] 实时音高检测与谱面对齐
 - [ ] 自适应练习策略（调速/循环）完整实现
 - [ ] 后端异步解析流水线（FFmpeg + Basic Pitch）
 
 ## 未决事项
 
-1. 前端框架选择（原生 JS / Vue / React / Svelte）
-2. 视频自动抓取的法律/合规方案
-3. AI 扒谱技术栈调研结论（Basic Pitch 已作为候选）
+1. 视频自动抓取的法律/合规方案（当前仅支持本地上传，URL 仅记录不下载）。
+2. AI 扒谱技术栈调研结论（Basic Pitch 已作为候选，需在 Python 3.10 环境验证）。
 
 ## 下一步
 
-1. 提供 DEMO 视频，用于验证视频-谱面对齐与 UI 效果。
-2. 将前端主页/执行页从 localStorage 切换到后端 API。
-3. 基于技术栈开始实现第一个可运行 Demo（视频播放 + 后端谱面 + 音高匹配）。
+1. 将谱面数据接入音游模式，用真实音符替换随机生成。
+2. 整合 `app.js` 与 `ui-demo.js`，让正式架构驱动 UI。
+3. 实现视频-谱面时间轴对齐与播放光标同步。
 4. 按 `PROJECT.md` 第 12 节 P0 优先级推进路演闭环。
 
 ## 备注
@@ -128,3 +129,4 @@ guitar/
 - 所有核心模块先写 JSDoc 类型和接口，待技术栈确定后再完整实现。
 - 不提前引入重型 AI 或 CV 库，避免技术栈锁定。
 - `PROJECT.md` 是当前项目执行的完整基准文档。
+- Bilibili 演示视频与 `demo_score.json` 仅保存在本地 `backend/storage/`（已被 `.gitignore` 排除），不在 Git 仓库中。首次 clone 后需按 `docs/BACKEND_START.md` 重新生成或从 Bilibili 下载。

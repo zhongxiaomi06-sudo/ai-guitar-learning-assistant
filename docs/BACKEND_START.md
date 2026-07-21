@@ -7,10 +7,12 @@
 ## 当前项目状态
 
 - 前端已可跑：`home.html`（上传/URL/演示课程） + `index.html`（执行页，含音游模式）。
-- 数据目前全在 `localStorage`，没有持久化。
-- `VideoFetcher.fromURL()` 和 `handleUrlUpload()` 是空实现，等待后端。
-- 谱面数据为硬编码，没有真实 DEMO 数据。
-- 实时音高检测为占位实现，还没接入 Web Audio API 真实算法。
+- 后端 FastAPI 已启动：提供课程 CRUD、视频上传、谱面 JSON、视频流服务。
+- 前端已从 `localStorage` 切换到后端 API（`src/shared/utils/api.js`）。
+- 已下载 Bilibili 演示视频并裁剪为 60 秒，已生成 `demo_score.json` 并上传到后端本地存储。
+- 实时音高检测已接入 Web Audio API（前端 YIN 简化实现，见 `src/core/audio/analyzer.js`）。
+- URL 抓取当前仅记录链接，不自动下载（受法律和反爬限制）。
+- **当前最大 Gap**：后端谱面数据已可获取，但音游模式仍使用随机音符，尚未被真实谱面驱动；`app.js` 与 `ui-demo.js` 两套前端系统尚未整合。
 
 ## 后端职责边界（MVP 阶段）
 
@@ -61,24 +63,11 @@ guitar/
 | 容器 | Docker Compose | 一键拉起本地环境。 |
 | 部署 | 待定 | 先用本地 Docker，云服务器后续再定。 |
 
-## 第一阶段：最小可行后端（1–2 天）
+## 第一阶段：最小可行后端（已完成）
 
 目标：让前端能调用 API，获取一个真实 DEMO 课程和谱面。
 
-### 1. 初始化项目
-
-```bash
-cd guitar
-mkdir backend
-cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install fastapi uvicorn sqlalchemy alembic pydantic python-dotenv psycopg2-binary python-multipart minio
-```
-
-### 2. 目录与文件
-
-```text
+**状态**：已完成。目录结构与文件如下：
 backend/app/
 ├── __init__.py
 ├── main.py
@@ -142,16 +131,17 @@ class Course(Base):
 - AI 自动扒谱（先用预精修 `score.json`）。
 - Celery（先用同步处理，小文件不影响）。
 
-## 第二阶段：接入真实 DEMO 数据（1 天）
+## 第二阶段：接入真实 DEMO 数据（已完成）
 
 目标：用一段真实吉他教学视频 + 人工精修谱面，跑通前端执行页。
 
-1. 准备一段 30–60 秒的 MP4 吉他教学视频。
-2. 手工编写 `demo_score.json`，符合 `src/shared/types/index.js` 的 `Project` 结构。
-3. 把视频和谱面上传到 MinIO / 本地存储。
-4. 在数据库里插入一条 `demo_course` 记录。
-5. 修改 `home.js`：上传时调用后端 `POST /api/v1/courses/upload`，成功后跳 `index.html?course={id}`。
-6. 修改 `main.js`：从后端 `GET /api/v1/courses/{id}/score` 加载谱面，而不是 localStorage。
+1. ✅ 已下载 Bilibili 吉他教学视频《拥抱》并裁剪为 60 秒。
+2. ✅ 已手工编写 `demo_score.json`，符合 `src/shared/types/index.js` 的 `Project` 结构。
+3. ✅ 已把视频和谱面上传到后端本地存储。
+4. ✅ 已修改 `home.js`：上传时调用后端 `POST /api/v1/courses/upload`。
+5. ✅ 已修改 `main.js`：从后端 `GET /api/v1/courses/{id}/score` 加载谱面（目前仅 console.log，尚未驱动 UI）。
+
+**注意**：演示视频和 `demo_score.json` 保存在本地 `backend/storage/`（已被 `.gitignore` 排除），Git 仓库中不包含这些媒体文件。新环境需重新生成或下载。
 
 ## 第三阶段：异步解析流水线（3–5 天）
 
@@ -181,27 +171,33 @@ class Course(Base):
 3. 前端用 Web Audio API 采集麦克风，实时检测音高，与目标谱面对比。
 4. 后端不参与实时评分，只提供目标数据。
 
-## 需要立即决策的问题
+## 已决策事项
 
-1. **是否保留 Vite + 原生 JS，还是迁移到 React/Next.js？**
-   - 当前前端是原生 JS，后续 AI 数据绑定会写很多 DOM 操作。如果团队熟悉 React，建议趁现在迁移到 Next.js（TECHNICAL_RESEARCH 也推荐 Next.js）。
-2. **后端是否独立仓库？**
-   - 建议先放在同一仓库 `guitar/backend/`，等 MVP 验证后再拆。
-3. **本地开发是否用 Docker？**
-   - 强烈建议用 Docker Compose 一次性拉起 PostgreSQL + MinIO + Redis，避免 Windows 环境折腾。
+1. **前端技术栈**：保留 Vite + 原生 JavaScript。React/Next.js 作为未来可选升级，当前不迁移。
+2. **后端是否独立仓库**：先放在同一仓库 `guitar/backend/`，等 MVP 验证后再拆。
+3. **本地开发是否用 Docker**：默认使用 SQLite + 本地文件存储，零配置即可运行；Docker Compose 用于需要 PostgreSQL + MinIO 的环境。
 
-## 第一个可执行命令（建议立刻执行）
+## 运行方式
+
+启动后端（SQLite 默认）：
 
 ```bash
-cd E:\Create\Code\guitar
-mkdir backend
 cd backend
-python -m venv .venv
 .venv\Scripts\activate
-pip install fastapi uvicorn sqlalchemy alembic pydantic python-dotenv psycopg2-binary python-multipart minio
+uvicorn app.main:app --reload
 ```
 
-然后我会继续帮你生成 `backend/app/main.py` 和 `docker-compose.yml` 的最小版本。
+启动前端：
+
+```bash
+npm run dev
+```
+
+访问：
+
+- 主页：`http://localhost:3000/home.html`
+- 执行页：`http://localhost:3000/index.html?course=<course_id>`
+- API 文档：`http://localhost:8000/docs`
 
 ## 与现有文档关系
 
