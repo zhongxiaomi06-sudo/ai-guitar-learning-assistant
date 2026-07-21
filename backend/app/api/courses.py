@@ -162,3 +162,29 @@ async def get_score(
         raise HTTPException(status_code=404, detail="Score file not found")
 
     return FileResponse(local_path, media_type="application/json")
+
+
+@router.post("/{course_id}/parse", response_model=CourseResponse)
+async def parse_course(
+    course_id: str,
+    db: Session = Depends(get_db),
+    storage: StorageService = Depends(get_storage),
+):
+    """Run the audio → tab pipeline on a course and generate a score."""
+    from app.services.audio_pipeline import AudioPipeline
+
+    course = db.query(CourseModel).filter(CourseModel.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    if not course.video_path:
+        raise HTTPException(status_code=400, detail="Course has no video")
+
+    try:
+        pipeline = AudioPipeline(storage)
+        pipeline.process_course(course_id, db)
+    except Exception as exc:
+        course.status = "error"
+        db.commit()
+        raise HTTPException(status_code=500, detail=f"Pipeline failed: {str(exc)}") from exc
+
+    return course

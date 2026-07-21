@@ -1,20 +1,35 @@
 # Backend dependencies for AI Guitar Learning Assistant
-# Step 1: minimal API service + course storage
 
+# Web framework
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
+
+# Data validation & settings
 pydantic>=2.7.0
 pydantic-settings>=2.3.0
+
+# Database
 sqlalchemy>=2.0.30
 alembic>=1.13.0
 psycopg2-binary>=2.9.9
+
+# Multipart uploads & env
 python-multipart>=0.0.9
 python-dotenv>=1.0.0
 
 # Storage (optional, can be enabled via env)
 minio>=7.2.7
 
-# Future AI pipeline dependencies
-# basic-pitch>=0.3.0
-# numpy>=1.26.0
-# librosa>=0.10.0
+# Audio → Tab pipeline (Python 3.11+ needs ONNX runtime instead of TensorFlow)
+basic-pitch==0.4.0
+onnxruntime>=1.16.0
+librosa>=0.10.0
+pretty_midi>=0.2.9
+mido>=1.2.10
+soundfile>=0.12.0
+resampy>=0.4.2
+numpy>=1.26.0
+scipy>=1.10.0
+
+# Note: basic-pitch 0.4.0 declares tensorflow as a requirement for python>=3.11,
+# but the ONNX model path works with onnxruntime only, avoiding the heavy TF install.

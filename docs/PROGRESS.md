@@ -14,10 +14,10 @@
 
 ## 当前状态
 
-**阶段**：后端第一步已完成，Bilibili 演示视频已下载并上传后端，demo_score.json 已生成并上传，前端已从 localStorage 切换到后端 API；当前最大 Gap 是谱面数据尚未驱动音游模式，存在 `app.js` 与 `ui-demo.js` 两套并行前端系统  
-**技术栈**：前端 Vite + 原生 JS；后端 FastAPI + SQLAlchemy + 本地文件存储  
-**基础构建工具**：Vite（前端）、Uvicorn（后端）  
-**最近更新**：2026-07-21 — 文档全面回顾与更新，移除未使用文件，记录当前技术决策。
+**阶段**：后端音频 → 六线谱流水线已跑通并输出合理 Score JSON；当前最大 Gap 是谱面数据尚未驱动音游模式，存在 `app.js` 与 `ui-demo.js` 两套并行前端系统
+**技术栈**：前端 Vite + 原生 JS；后端 FastAPI + SQLAlchemy + 本地文件存储；Python 3.12 + Basic Pitch ONNX
+**基础构建工具**：Vite（前端）、Uvicorn（后端）
+**最近更新**：2026-07-21 — 修复音频流水线碎音符与弦品求解，输出 18 小节/234 音符的演示谱面。
 
 ## 项目定位
 
@@ -105,20 +105,26 @@ guitar/
 
 ## 待办
 
+- [x] 后端解析流水线服务（`transcription.py` / `tab_solver.py` / `score_builder.py` / `audio_pipeline.py`）
+- [x] 本地命令行脚本 `scripts/run_pipeline.py` 跑通 Bilibili 演示视频
+- [x] 流水线输出 Canonical Score JSON（18 小节 / 234 音符 / 品 0–11）
+- [x] 合并同音高碎音符、同弦同品重叠音符，减少重复检测
+- [x] 优化 DP 弦品求解代价函数，避免高把位大跳
+- [x] 更新 `docs/AUDIO_TO_TAB_PIPELINE.md` 为当前 Python 实现
 - [ ] 将谱面数据真正驱动音游模式音符生成
 - [ ] 整合 `app.js` 与 `ui-demo.js`，消除两套并行前端系统
 - [ ] 实时音高检测与谱面对齐
 - [ ] 自适应练习策略（调速/循环）完整实现
-- [ ] 后端异步解析流水线（FFmpeg + Basic Pitch）
+- [ ] 后端异步任务队列（Celery）接入流水线
 
 ## 未决事项
 
 1. 视频自动抓取的法律/合规方案（当前仅支持本地上传，URL 仅记录不下载）。
-2. AI 扒谱技术栈调研结论（Basic Pitch 已作为候选，需在 Python 3.10 环境验证）。
+2. AI 扒谱技术栈已确定为 Basic Pitch ONNX；当前为单声道吉他弹唱，后续如需人声/伴奏分离可引入 Demucs/Spleeter。
 
 ## 下一步
 
-1. 将谱面数据接入音游模式，用真实音符替换随机生成。
+1. 将后端生成的 Score JSON 接入音游模式，用真实音符替换随机生成。
 2. 整合 `app.js` 与 `ui-demo.js`，让正式架构驱动 UI。
 3. 实现视频-谱面时间轴对齐与播放光标同步。
 4. 按 `PROJECT.md` 第 12 节 P0 优先级推进路演闭环。

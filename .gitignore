@@ -35,3 +35,4 @@ backend/storage/
 backend/*.db
 backend/.env
 backend/demo_work/
+backend/*.wav
