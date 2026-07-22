@@ -1,189 +1,384 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="format-detection" content="telephone=no,email=no,address=no">
-  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#1a1a1a" media="(prefers-color-scheme: dark)">
-  <title>吉他 AI 跟弹 - 执行页</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="弦间是一款将吉他教学视频转化为互动谱面与智能跟练课程的 AI 学习工具。">
+  <meta name="theme-color" content="#f2efe7">
+  <title>弦间 · AI 吉他陪练</title>
   <link rel="stylesheet" href="/src/assets/css/reset.css">
-  <link rel="stylesheet" href="/src/assets/css/variables.css">
-  <link rel="stylesheet" href="/src/assets/css/base.css">
-  <link rel="stylesheet" href="/src/assets/css/mobile.css" media="(max-width: 767.98px)">
-  <link rel="stylesheet" href="/src/assets/css/desktop.css" media="(min-width: 768px)">
-  <link rel="stylesheet" href="/src/assets/css/main.css">
-  <link rel="stylesheet" href="/src/assets/css/guitar.css">
+  <link rel="stylesheet" href="/src/assets/css/product.css">
 </head>
 <body>
-  <div id="app" class="app guitar-app">
-    <header class="guitar-header">
-      <div class="header-left">
-        <a href="/home.html" class="guitar-title-link">
-          <h1 class="guitar-title">吉他 AI 跟弹</h1>
-        </a>
-        <span class="guitar-subtitle" id="currentCourseTitle">跟着视频把谱子弹出来</span>
+  <a class="skip-link" href="#mainContent">跳到主要内容</a>
+
+  <div class="product-shell" id="productShell">
+    <header class="topbar">
+      <div class="brand" aria-label="弦间">
+        <span class="brand-mark" aria-hidden="true"><i></i></span>
+        <span class="brand-copy">
+          <strong>弦间</strong>
+          <small>AI 吉他陪练</small>
+        </span>
       </div>
-      <div class="guitar-controls">
-        <button class="btn btn-ghost" id="importBtn">导入视频</button>
-        <button class="btn btn-primary" id="startBtn" disabled>
-          <span class="btn-icon">▶</span> 开始
+
+      <div class="topbar-course" data-topbar-course hidden>
+        <strong data-course-title>未命名吉他课程</strong>
+        <span><b data-course-bpm>--</b> BPM · <b data-time-signature>4/4</b></span>
+      </div>
+
+      <div class="topbar-actions">
+        <button class="status-pill" type="button" data-action="open-mic" aria-label="查看麦克风状态">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span data-mic-label>麦克风未开启</span>
         </button>
-        <button class="btn btn-ghost" id="pauseBtn" disabled>
-          <span class="btn-icon">⏸</span> 暂停
-        </button>
-        <button class="btn btn-ghost" id="resetBtn" disabled>
-          <span class="btn-icon">↺</span> 重置
+        <button class="icon-button" type="button" data-action="open-settings" aria-label="打开设置">
+          <span aria-hidden="true">∷</span>
         </button>
       </div>
     </header>
 
-    <main class="guitar-main">
-      <section class="panel video-panel">
-        <div class="panel-header">
-          <h2 class="panel-title">视频</h2>
-          <span class="panel-badge" id="videoStatus">未导入</span>
+    <main id="mainContent" tabindex="-1">
+      <!-- 上传与解析阶段：页面唯一的入口状态 -->
+      <section class="stage" data-stage aria-labelledby="stageTitle">
+        <div class="stage-intro" data-stage-intro>
+          <p class="eyebrow"><span></span>视频进来，课程出来</p>
+          <h1 id="stageTitle">上传吉他视频，<em>原地开始弹唱跟练。</em></h1>
+          <p>AI 自动识别音符、和弦与小节，谱面、声音与画面在这一个页面里同步。</p>
         </div>
-        <div class="video-wrapper">
-          <video id="videoPlayer" controls playsinline></video>
-          <div class="video-overlay" id="videoOverlay">
-            <div class="video-placeholder">
-              <div class="placeholder-icon">▶</div>
-              <p>从主页导入视频开始练习</p>
-              <p class="placeholder-hint">支持本地上传或粘贴 URL</p>
+
+        <div class="upload-composition" data-upload-area>
+          <div class="upload-panel" data-upload-panel>
+            <div class="upload-dropzone" data-dropzone role="button" tabindex="0" aria-label="上传吉他教学视频">
+              <input id="videoInput" type="file" accept="video/mp4,video/quicktime,.mp4,.mov" hidden>
+              <div class="string-emblem" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span><span></span>
+                <b>+</b>
+              </div>
+              <p class="upload-kicker">NEW COURSE</p>
+              <h2>上传一段吉他视频</h2>
+              <p>拖放到这里，或点击选择文件</p>
+              <div class="format-line"><span>MP4 / MOV</span><i></i><span>30 秒–10 分钟</span><i></i><span>建议 ≤ 1 GB</span></div>
             </div>
+
+            <div class="selected-file" data-selected-file hidden>
+              <div class="file-preview" aria-hidden="true">
+                <div class="file-preview-lines"></div>
+                <span>VIDEO</span>
+              </div>
+              <div class="file-details">
+                <p class="upload-kicker">准备就绪</p>
+                <h2 data-file-name>木吉他入门练习.mp4</h2>
+                <p data-file-meta>00:48 · 68.4 MB · 1080p</p>
+                <div class="quality-row" aria-label="视频质量检查">
+                  <span><i></i>音频清晰</span>
+                  <span><i></i>双手可见</span>
+                  <span><i></i>画面稳定</span>
+                </div>
+                <div class="file-actions">
+                  <button class="primary-button" type="button" data-action="start-analysis">开始 AI 解析 <span>→</span></button>
+                  <button class="text-button" type="button" data-action="reset-file">重新选择</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="demo-link" type="button" data-action="use-demo">
+            <span class="demo-play" aria-hidden="true">▷</span>
+            <span><small>还没有视频？</small><strong>使用 48 秒示例课程</strong></span>
+            <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+
+        <!-- 解析进度：原地展开，不跳页 -->
+        <div class="analysis-inline" data-analysis-panel hidden>
+          <div class="analysis-heading-row">
+            <div>
+              <p class="eyebrow"><span></span>ANALYSING</p>
+              <h2>AI 正在听懂这段演奏</h2>
+            </div>
+            <div class="analysis-total" role="progressbar" aria-label="AI 解析整体进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-live="polite">
+              <strong data-analysis-percent>0%</strong>
+              <span>整体进度</span>
+            </div>
+          </div>
+
+          <div class="analysis-grid">
+            <div class="analysis-media card-surface">
+              <div class="media-stage" data-media-stage>
+                <video id="analysisVideo" muted playsinline hidden></video>
+                <div class="abstract-video" data-video-fallback>
+                  <div class="guitar-neck" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                  <div class="player-silhouette" aria-hidden="true"></div>
+                </div>
+                <div class="detected-chord"><small>处理阶段</small><strong data-detected-chord>等待</strong></div>
+                <div class="media-time">--:--.---</div>
+              </div>
+              <div class="analysis-wave" data-waveform aria-label="正在生成的音频波形"></div>
+            </div>
+
+            <aside class="analysis-steps card-surface" aria-label="AI 解析步骤">
+              <div class="steps-header">
+                <span>8 个步骤</span>
+                <button class="text-button" type="button" data-action="skip-analysis">快速完成</button>
+              </div>
+              <ol>
+                <li data-analysis-step="0"><i></i><div><strong>安全读取视频</strong><span>等待开始</span></div><b>01</b></li>
+                <li data-analysis-step="1"><i></i><div><strong>提取分析音轨</strong><span>等待开始</span></div><b>02</b></li>
+                <li data-analysis-step="2"><i></i><div><strong>识别吉他音高</strong><span>等待开始</span></div><b>03</b></li>
+                <li data-analysis-step="3"><i></i><div><strong>合并碎音符</strong><span>等待开始</span></div><b>04</b></li>
+                <li data-analysis-step="4"><i></i><div><strong>求解可演奏弦位</strong><span>等待开始</span></div><b>05</b></li>
+                <li data-analysis-step="5"><i></i><div><strong>生成六线谱</strong><span>等待开始</span></div><b>06</b></li>
+                <li data-analysis-step="6"><i></i><div><strong>校验谱面数据</strong><span>等待开始</span></div><b>07</b></li>
+                <li data-analysis-step="7"><i></i><div><strong>准备跟练课程</strong><span>等待开始</span></div><b>08</b></li>
+              </ol>
+              <button class="primary-button full-width" type="button" data-analysis-action data-action="enter-practice" hidden>
+                进入弹唱跟练 <span>→</span>
+              </button>
+            </aside>
+          </div>
+
+          <div class="analysis-discovery" aria-live="polite">
+            <span class="pulse-dot"></span>
+            <p><strong data-analysis-message>正在准备解析…</strong><span data-analysis-detail>结果会在这里实时出现</span></p>
+            <div class="discovery-values"><span data-analysis-bpm>-- BPM</span><span data-analysis-signature>--</span><span data-analysis-mode>示例课程</span></div>
           </div>
         </div>
       </section>
 
-      <section class="panel score-panel">
-        <div class="panel-header">
-          <h2 class="panel-title">乐谱</h2>
-          <span class="panel-badge" id="scoreBpm">-- BPM</span>
-        </div>
-        <div data-score class="score-canvas">
-          <div class="tab-scroll" id="tabScroll">
-            <div class="tab-ruler" id="tabRuler"></div>
-            <div class="tab-lines" id="tabLines"></div>
-            <div class="tab-playhead"></div>
+      <!-- 弹唱工作区：上传解析完成后原地展开 -->
+      <section class="workspace-shell" data-workspace hidden aria-labelledby="playerTitle">
+        <div class="workspace-toolbar">
+          <div class="workspace-title">
+            <div><small data-segment-label>完整跟练</small><h1 id="playerTitle" data-course-title>未命名吉他课程</h1></div>
+          </div>
+          <div class="workspace-stats">
+            <span><span data-course-bpm>92</span> <small>BPM</small></span>
+            <span class="live-mic"><i></i><span data-mic-label>未开启麦克风</span></span>
+            <div class="speed-control" aria-label="播放速度">
+              <button type="button" data-speed="0.5">50%</button>
+              <button type="button" data-speed="0.6">60%</button>
+              <button type="button" data-speed="0.75">75%</button>
+              <button type="button" data-speed="0.9">90%</button>
+              <button class="is-active" type="button" data-speed="1">100%</button>
+            </div>
+            <button class="text-button" type="button" data-action="reupload">换视频</button>
+            <button class="secondary-button compact-button" type="button" data-action="finish-practice">结束练习</button>
           </div>
         </div>
-        <div class="hand-shapes">
-          <div data-left-hand class="hand-shape-box" id="leftHandBox">
-            <div class="hand-shape-title">左手</div>
-            <div class="hand-shape-content">等待开始</div>
-          </div>
-          <div data-right-hand class="hand-shape-box" id="rightHandBox">
-            <div class="hand-shape-title">右手</div>
-            <div class="hand-shape-content">等待开始</div>
-          </div>
-        </div>
-      </section>
 
-      <section class="panel suggestions-panel">
-        <div class="panel-header">
-          <h2 class="panel-title">建议</h2>
-          <span class="panel-badge" id="accuracyBadge">0%</span>
-        </div>
-        <div data-feedback class="feedback-text" data-type="pending" id="feedbackText">等待开始...</div>
-        <div data-next-hint class="next-hint" id="nextHint">准备开始</div>
-        <div class="quick-actions">
-          <button class="btn btn-ghost btn-sm" id="loopBtn">A/B 循环</button>
-          <button class="btn btn-ghost btn-sm" id="slowBtn">降速</button>
-          <button class="btn btn-ghost btn-sm" id="backVideoBtn">回看动作</button>
-        </div>
-      </section>
+        <div class="practice-board">
+          <div class="lesson-column">
+            <div class="mobile-view-switch" role="group" aria-label="切换练习画面">
+              <button class="is-active" type="button" data-action="switch-mobile-view" data-mobile-view="teacher" aria-pressed="true">老师画面</button>
+              <button type="button" data-action="switch-mobile-view" data-mobile-view="left" aria-pressed="false">左手特写</button>
+              <button type="button" data-action="switch-mobile-view" data-mobile-view="right" aria-pressed="false">右手特写</button>
+            </div>
 
-      <section class="panel matching-panel" id="matchingPanel">
-        <div class="matching-header">
-          <div class="matching-stats">
-            <div class="stat-item">
-              <span class="stat-label">准确率</span>
-              <span class="stat-value" id="accuracyText">0%</span>
+            <div class="player-grid">
+              <section class="teacher-pane" id="teacherPane" aria-label="原始教学视频">
+                <div class="teacher-video">
+                  <video id="playerVideo" playsinline hidden></video>
+                  <div class="abstract-video player-fallback" data-video-fallback>
+                    <div class="guitar-neck" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                    <div class="player-silhouette" aria-hidden="true"></div>
+                  </div>
+                  <div class="video-caption"><span>原始教学视频</span><strong data-current-chord>--</strong></div>
+                  <div class="frame-counter">00:00.000</div>
+                </div>
+                <div class="video-controls">
+                  <button type="button" data-action="frame-back" aria-label="后退一帧">│◁</button>
+                  <button class="main-play" type="button" data-action="toggle-play" aria-label="播放" aria-pressed="false"><span data-play-icon>▶</span></button>
+                  <button type="button" data-action="frame-forward" aria-label="前进一帧">▷│</button>
+                  <span class="current-time" data-player-time>00:00</span>
+                  <div class="seek-track" data-seek-track role="slider" tabindex="0" aria-label="视频进度" aria-valuemin="0" aria-valuemax="48" aria-valuenow="0"><i data-seek-progress></i><b data-loop-range></b></div>
+                  <span data-player-duration>00:48</span>
+                  <button type="button" data-action="toggle-loop" aria-label="开启 A B 循环">A—B</button>
+                  <button type="button" data-action="fullscreen" aria-label="全屏播放">⛶</button>
+                </div>
+              </section>
+
+              <aside class="hand-stack" aria-label="双手动作特写">
+                <article class="hand-pane left-hand-pane" id="leftHandPane">
+                  <header><span>左手特写</span><b data-left-hand-confidence>--</b></header>
+                  <div class="fretboard-visual">
+                    <div class="fret-strings" aria-hidden="true"></div>
+                    <span class="finger-dot finger-one">1</span><span class="finger-dot finger-two">2</span><span class="finger-dot finger-three">3</span>
+                    <div class="motion-arrow" data-next-motion>→ <small>等待演奏</small></div>
+                  </div>
+                  <footer data-left-hand-detail><span>等待谱面</span></footer>
+                </article>
+                <article class="hand-pane right-hand-pane" id="rightHandPane">
+                  <header><span>右手特写</span><b data-right-hand-confidence>--</b></header>
+                  <div class="pick-visual"><strong data-pick-direction>↓</strong><div><span data-pick-finger>i · 食指</span><small data-pick-detail>等待演奏</small></div><i></i></div>
+                  <footer><span data-right-hand-detail>跟随视频开始后显示拨弦提示</span></footer>
+                </article>
+              </aside>
             </div>
-            <div class="stat-item">
-              <span class="stat-label">连击</span>
-              <span class="stat-value" id="streakText">0</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">小节</span>
-              <span class="stat-value" id="barText">--</span>
-            </div>
+
+            <section class="timeline-pane" aria-label="同步谱面与时间轴">
+              <div class="waveform-row">
+                <span class="track-label">WAVE</span>
+                <div class="workspace-wave" data-waveform></div>
+              </div>
+              <div class="measure-row"><span class="track-label">BAR</span><div data-measures></div></div>
+              <div class="chord-row"><span class="track-label">CHORD</span><div data-chords></div></div>
+              <div class="tablature-row">
+                <span class="track-label">TAB</span>
+                <div class="tablature" data-tablature>
+                  <div class="tab-string"><b>e</b></div><div class="tab-string"><b>B</b></div><div class="tab-string"><b>G</b></div><div class="tab-string"><b>D</b></div><div class="tab-string"><b>A</b></div><div class="tab-string"><b>E</b></div>
+                  <div class="score-playhead" data-score-playhead></div>
+                </div>
+              </div>
+              <div class="timeline-playhead" data-timeline-playhead></div>
+            </section>
           </div>
-          <div class="matching-status" id="hitFeedback">准备</div>
-        </div>
-        <div class="matching-body">
-          <div class="match-canvas" data-match-canvas>
-            <canvas id="matchGameCanvas"></canvas>
-          </div>
-          <div class="pitch-gauge" id="pitchGauge">
-            <div class="gauge-label">音高</div>
-            <div class="gauge-track">
-              <div class="gauge-target"></div>
-              <div class="gauge-current" id="gaugeCurrent"></div>
+
+          <aside class="feedback-panel feedback-bar" aria-live="polite" aria-label="实时演奏判定">
+            <header class="feedback-heading">
+              <div><small>AI LISTENING</small><strong>实时判定</strong></div>
+              <span><i aria-hidden="true"></i>LIVE</span>
+            </header>
+            <div class="feedback-verdict">
+              <span class="listening-rings" aria-hidden="true"><i></i></span>
+              <div class="listen-state"><small>当前状态</small><strong data-feedback-title>准备就绪</strong></div>
             </div>
-            <div class="gauge-label">偏差</div>
-          </div>
+            <p class="feedback-copy" data-feedback-copy>点击播放，跟随老师开始演奏。</p>
+            <div class="feedback-metrics">
+              <div class="live-score"><small>本轮准确率</small><strong data-live-score>--</strong></div>
+              <div><small>当前小节</small><strong data-feedback-bar>01</strong></div>
+              <div><small>目标动作</small><strong data-feedback-target>等待谱面</strong></div>
+              <div><small>播放速度</small><strong data-feedback-speed>100%</strong></div>
+            </div>
+            <div class="feedback-guidance">
+              <small>跟练提示</small>
+              <p>放松手腕，在拍点前准备下一个指位。轻微误差不会打断演奏。</p>
+            </div>
+            <button class="issue-button" type="button" data-action="open-focus" data-issue-button hidden><span data-issue-copy>检测到难点</span><strong>专项练习 →</strong></button>
+          </aside>
         </div>
       </section>
     </main>
 
-    <!-- Floating Settings -->
-    <div class="settings-float">
-      <button class="settings-toggle" id="settingsToggle">⚙</button>
-      <div class="settings-panel" id="settingsPanel">
-        <div class="settings-panel-header">
-          <h3>设置</h3>
-          <button class="settings-close" id="settingsClose">×</button>
+    <div class="toast" role="status" aria-live="polite" data-toast hidden></div>
+
+    <!-- 麦克风授权 -->
+    <div class="modal-layer" data-mic-modal hidden>
+      <div class="modal-backdrop" data-action="close-mic"></div>
+      <section class="mic-modal" role="dialog" aria-modal="true" aria-labelledby="micTitle">
+        <button class="modal-close" type="button" data-action="close-mic" aria-label="关闭">×</button>
+        <div class="mic-illustration" aria-hidden="true"><span></span><i></i><i></i><i></i></div>
+        <p class="eyebrow"><span></span>LIVE LISTENING</p>
+        <h2 id="micTitle">需要使用麦克风<br>聆听你的吉他。</h2>
+        <p>录音仅用于当下的实时分析，不会保存原始音频。</p>
+        <div class="privacy-note"><span>◌</span><div><strong>你始终拥有控制权</strong><small>可随时在顶部关闭麦克风</small></div></div>
+        <button class="primary-button large-button full-width" type="button" data-action="allow-mic">允许麦克风 <span>→</span></button>
+        <button class="text-button full-width" type="button" data-action="skip-mic">暂不开启，仅观看课程</button>
+      </section>
+    </div>
+
+    <!-- 专项纠错：页面内覆盖层 -->
+    <div class="modal-layer focus-layer" data-focus-layer hidden>
+      <div class="modal-backdrop" data-action="close-focus"></div>
+      <section class="focus-sheet" role="dialog" aria-modal="true" aria-labelledby="focusTitle">
+        <div class="focus-header">
+          <button class="back-link" type="button" data-action="close-focus">← 返回完整跟练</button>
+          <p class="eyebrow"><span></span>FOCUS MODE</p>
+          <h1 id="focusTitle">只练这一个动作。</h1>
+          <p data-focus-subtitle>第 6 小节 · 回看循环 17.42–18.92 秒</p>
         </div>
 
-        <div class="settings-group">
-          <label class="setting-label">速度</label>
-          <div class="speed-chips" id="speedChips">
-            <button class="chip" data-speed="0.5">0.5x</button>
-            <button class="chip" data-speed="0.75">0.75x</button>
-            <button class="chip active" data-speed="1.0">1.0x</button>
+        <div class="focus-grid">
+          <section class="review-stage card-surface">
+            <div class="review-video" data-review-video>
+              <video id="reviewVideo" muted playsinline hidden></video>
+              <div class="abstract-video player-fallback" data-video-fallback><div class="guitar-neck"><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="player-silhouette"></div></div>
+              <div class="review-marker marker-one"><i>1</i><span>食指保留</span></div>
+              <div class="review-marker marker-two"><i>3</i><span data-marker-target>无名指移向目标品位</span></div>
+              <div class="review-caption"><small data-review-caption>老师动作 · 60% 速度</small><strong data-review-tip>不要完全抬起食指</strong></div>
+            </div>
+            <div class="review-controls">
+              <button type="button" data-action="review-frame-back">│◁ 上一帧</button>
+              <button class="review-play" type="button" data-action="toggle-review">▶ 观看动作</button>
+              <button type="button" data-action="review-frame-forward">下一帧 ▷│</button>
+              <button type="button" data-action="toggle-mirror">镜像</button>
+              <button type="button" data-action="toggle-markers">AI 标记</button>
+            </div>
+          </section>
+
+          <aside class="focus-coach card-surface">
+            <div class="coach-issue"><span>01</span><div><small>本轮只关注</small><h2 data-focus-issue>换到目标和弦时的漏音</h2></div></div>
+            <div class="coach-tip"><strong>动作提示</strong><p data-focus-tip>保留食指与指板的距离，只移动需要换把的手指。落指后，先单独听高音弦是否清晰。</p></div>
+            <div class="speed-ladder" aria-label="提速进度" data-speed-ladder>
+              <div class="is-current"><i></i><strong>60%</strong><span>练习中</span></div>
+              <div><i></i><strong>75%</strong><span>待解锁</span></div>
+              <div><i></i><strong>90%</strong><span>待解锁</span></div>
+              <div><i></i><strong>100%</strong><span>原速</span></div>
+            </div>
+            <div class="round-target"><span data-round-info>第 1 轮</span><strong>目标：连续正确 2 次</strong></div>
+            <button class="primary-button large-button full-width" type="button" data-action="try-focus">我来试试 <span>→</span></button>
+          </aside>
+        </div>
+
+        <section class="comparison-card" data-comparison hidden aria-live="polite">
+          <div><p class="eyebrow"><span></span>IMPROVED</p><h2 data-comparison-title>这一遍有进步。</h2><p data-comparison-next>下一步：保持当前速度再练一次。</p></div>
+          <div class="comparison-metrics">
+            <span><small>音符正确率</small><b data-cmp-acc-prev>--</b><i>→</i><strong data-cmp-acc-now>--</strong></span>
+            <span><small>和弦完整度</small><b data-cmp-chord-prev>--</b><i>→</i><strong data-cmp-chord-now>--</strong></span>
+            <span><small>节奏稳定度</small><b data-cmp-time-prev>--</b><i>→</i><strong data-cmp-time-now>--</strong></span>
           </div>
+          <button class="secondary-button" type="button" data-action="close-focus">回到完整跟练</button>
+        </section>
+        <div class="countdown" data-countdown hidden aria-live="assertive"><span>3</span><small>准备演奏</small></div>
+      </section>
+    </div>
+
+    <!-- 练习结果：页面内覆盖层 -->
+    <div class="modal-layer results-layer" data-results-layer hidden>
+      <div class="modal-backdrop" data-action="close-results"></div>
+      <section class="results-sheet" role="dialog" aria-modal="true" aria-labelledby="resultsTitle">
+        <div class="results-intro">
+          <p class="eyebrow"><span></span>SESSION COMPLETE</p>
+          <h1 id="resultsTitle">今天的手，比昨天更懂这首曲。</h1>
+          <p data-results-subtitle>本次练习数据来自你的真实演奏判定。</p>
         </div>
 
-        <div class="settings-group">
-          <label class="setting-label">难度</label>
-          <div class="difficulty-chips" id="difficultyChips">
-            <button class="chip" data-difficulty="loose">宽松</button>
-            <button class="chip active" data-difficulty="normal">标准</button>
-            <button class="chip" data-difficulty="strict">严格</button>
-          </div>
+        <div class="results-grid">
+          <section class="score-card card-surface">
+            <div class="score-ring" data-score-ring style="--score:0"><span><strong data-results-score>0</strong><small>本次得分</small></span></div>
+            <div class="score-note"><i data-results-delta>--</i><span>相比首次练习</span></div>
+          </section>
+          <section class="metric-card card-surface"><span>01</span><small>音符正确率</small><strong data-metric-accuracy>--</strong><div><i data-metric-accuracy-bar style="--value:0%"></i></div><p data-metric-accuracy-note>--</p></section>
+          <section class="metric-card card-surface"><span>02</span><small>和弦完整度</small><strong data-metric-chord>--</strong><div><i data-metric-chord-bar style="--value:0%"></i></div><p data-metric-chord-note>--</p></section>
+          <section class="metric-card card-surface"><span>03</span><small>节奏稳定度</small><strong data-metric-timing>--</strong><div><i data-metric-timing-bar style="--value:0%"></i></div><p data-metric-timing-note>--</p></section>
         </div>
 
-        <div class="settings-group">
-          <label class="setting-label">判定偏移</label>
-          <div class="offset-control">
-            <input type="range" id="offsetSlider" min="-150" max="150" step="5" value="0">
-            <span id="offsetValue">0ms</span>
-          </div>
-        </div>
+        <section class="mastery-section">
+          <div><p class="eyebrow"><span></span>MASTERY MAP</p><h2>课程掌握地图</h2></div>
+          <div class="mastery-map" data-mastery-map></div>
+        </section>
 
-        <div class="settings-group">
-          <label class="setting-label">自动调速</label>
-          <button class="toggle-btn active" id="autoSlowToggle" data-active="true">
-            <span class="toggle-dot"></span>
-            <span class="toggle-text">开</span>
-          </button>
+        <div class="results-actions">
+          <button class="primary-button large-button" type="button" data-action="practice-again">再弹一次 <span>→</span></button>
+          <button class="secondary-button" type="button" data-action="review-weakest">复习薄弱小节</button>
+          <button class="text-button" type="button" data-action="close-results">返回跟练</button>
         </div>
+      </section>
+    </div>
 
-        <div class="settings-group">
-          <label class="setting-label">输入设备</label>
-          <select class="compact-select" data-setting="inputDevice">
-            <option>默认麦克风</option>
-          </select>
-        </div>
-      </div>
+    <!-- 设置 -->
+    <div class="settings-layer" data-settings-layer hidden>
+      <div class="modal-backdrop" data-action="close-settings"></div>
+      <aside class="settings-drawer" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+        <header><div><p class="eyebrow"><span></span>PREFERENCES</p><h2 id="settingsTitle">练习设置</h2></div><button class="modal-close" type="button" data-action="close-settings" aria-label="关闭">×</button></header>
+        <div class="setting-block"><div><strong>反馈容错</strong><span>调整实时判定的严格程度</span></div><div class="segmented-control"><button type="button" data-tolerance="gentle">宽松</button><button class="is-active" type="button" data-tolerance="normal">标准</button><button type="button" data-tolerance="strict">严格</button></div></div>
+        <div class="setting-block setting-row"><div><strong>自动降速</strong><span>连续出错时自动进入专项练习</span></div><button class="switch is-on" type="button" role="switch" aria-checked="true" data-action="toggle-auto-slow"><i></i></button></div>
+        <div class="setting-block setting-row"><div><strong>显示 AI 动作标记</strong><span>在双手特写上标出落指与方向</span></div><button class="switch is-on" type="button" role="switch" aria-checked="true" data-action="toggle-overlay"><i></i></button></div>
+        <div class="setting-block"><div><strong>界面模式</strong><span>选择适合当前环境的对比度</span></div><div class="segmented-control"><button class="is-active" type="button" data-theme-choice="light">暖纸</button><button type="button" data-theme-choice="dark">夜间</button></div></div>
+        <div class="settings-foot"><span class="status-dot"></span><p><strong data-mic-label>麦克风未开启</strong><small>开始跟练时可进行环境校准</small></p><button type="button" data-action="open-mic">设置</button></div>
+      </aside>
     </div>
   </div>
 
-  <script type="module" src="/src/main.js"></script>
+  <script type="module" src="/src/practice-app.js"></script>
 </body>
 </html>

@@ -1,0 +1,36 @@
+# Backend dependencies for AI Guitar Learning Assistant
+
+# Web framework
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+
+# Data validation & settings
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+
+# Database
+sqlalchemy>=2.0.30
+alembic>=1.13.0
+psycopg2-binary>=2.9.9
+
+# Multipart uploads & env
+python-multipart>=0.0.9
+python-dotenv>=1.0.0
+
+# Storage (optional, can be enabled via env)
+minio>=7.2.7
+
+# Audio → Tab pipeline.
+# Basic Pitch is listed in requirements-pipeline.txt because its PyPI metadata
+# requires tensorflow on python>=3.11, but we run the ONNX model path.
+# Install it first with: pip install --no-deps -r requirements-pipeline.txt
+onnxruntime>=1.16.0
+librosa>=0.10.0
+pretty_midi>=0.2.9
+mido>=1.2.10
+soundfile>=0.12.0
+resampy>=0.4.2
+numpy>=1.26.0
+scipy>=1.10.0
+
+# Dev / test dependencies are in requirements-dev.txt.

@@ -1,8 +1,10 @@
 # Dependencies
 node_modules/
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
+
+# Local environment overrides
+/.env
+/.env.*
+!/.env.example
 
 # Build output
 dist/
@@ -26,3 +28,14 @@ Thumbs.db
 # Temporary
 *.tmp
 *.temp
+
+# Backend
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/storage/
+backend/*.db
+backend/.env
+backend/demo_work/
+backend/*.wav
+backend/python_files.txt
