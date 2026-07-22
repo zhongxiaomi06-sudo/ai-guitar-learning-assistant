@@ -302,7 +302,7 @@
               <div class="hand-mode-toolbar">
                 <span>手部视图</span>
                 <div role="group" aria-label="手部动作显示模式">
-                  <button class="is-active" type="button" data-hand-view="guide" aria-pressed="true">动作示意</button>
+                  <button class="is-active" type="button" data-hand-view="guide" aria-pressed="true">模拟手</button>
                   <button type="button" data-hand-view="zoom" aria-pressed="false">视频放大</button>
                   <button class="panel-collapse-button" type="button" data-panel-toggle="hands" aria-label="最小化双手动作面板" aria-expanded="true"><span aria-hidden="true">−</span></button>
                 </div>
@@ -312,7 +312,14 @@
                 <div class="hand-video-crop">
                   <canvas data-hand-canvas="left" tabindex="0" aria-label="从原始教学视频同步裁切的左手指板画面，可拖动调整取景"></canvas>
                   <div class="hand-action-guide left-action-guide" data-hand-guide="left" aria-label="左手按弦动作示意图">
-                    <div class="fretboard-guide" aria-hidden="true"><span class="fret-nut"></span><div data-left-guide-dots></div></div>
+                    <div class="fretboard-guide" aria-hidden="true">
+                      <span class="fret-nut"></span><div data-left-guide-dots></div>
+                      <svg class="simulated-hand simulated-left-hand" data-sim-left-hand viewBox="0 0 100 100" preserveAspectRatio="none">
+                        <path class="sim-wrist" d="M42 104 C43 91 45 82 50 76 L66 78 C70 87 71 96 72 104 Z"></path>
+                        <ellipse class="sim-palm" cx="57" cy="79" rx="15" ry="17"></ellipse>
+                        <g data-sim-left-fingers></g>
+                      </svg>
+                    </div>
                     <p><strong data-left-guide-title>等待当前音符</strong><small data-left-guide-copy>将在指板上标出琴弦、品位和手指</small></p>
                   </div>
                   <div class="hand-crop-placeholder">播放视频后显示左手画面</div>
@@ -326,7 +333,16 @@
                 <div class="hand-video-crop">
                   <canvas data-hand-canvas="right" tabindex="0" aria-label="从原始教学视频同步裁切的右手拨弦画面，可拖动调整取景"></canvas>
                   <div class="hand-action-guide right-action-guide" data-hand-guide="right" aria-label="右手拨弦动作示意图">
-                    <div class="string-guide" data-right-guide-strings aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><b data-right-guide-arrow>↓</b></div>
+                    <div class="string-guide" data-right-guide-strings aria-hidden="true">
+                      <i></i><i></i><i></i><i></i><i></i><i></i><b data-right-guide-arrow>↓</b>
+                      <div class="simulated-hand simulated-right-hand" data-sim-right-hand>
+                        <span class="sim-right-wrist"></span><span class="sim-right-palm"></span>
+                        <span class="sim-right-finger sim-thumb" data-pick-finger="P"></span>
+                        <span class="sim-right-finger sim-index" data-pick-finger="i"></span>
+                        <span class="sim-right-finger sim-middle" data-pick-finger="m"></span>
+                        <span class="sim-right-finger sim-ring" data-pick-finger="a"></span>
+                      </div>
+                    </div>
                     <p><strong data-right-guide-title>等待当前音符</strong><small data-right-guide-copy>将在琴弦上标出拨弦方向和手指</small></p>
                   </div>
                   <div class="hand-crop-placeholder">播放视频后显示右手画面</div>

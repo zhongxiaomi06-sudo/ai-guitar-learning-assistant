@@ -2243,6 +2243,45 @@ function renderHandGuides(note, left, right) {
     });
   }
 
+  const leftHand = $('[data-sim-left-hand]');
+  const leftFingerLayer = $('[data-sim-left-fingers]');
+  if (leftHand && leftFingerLayer) {
+    const fretted = positions.filter((position) => Number(position.fret) > 0);
+    const activePositions = fretted.length ? fretted : positions;
+    const maxFret = Math.max(5, Math.min(12, ...activePositions.map((position) => Number(position.fret) || 0)));
+    const averageX = activePositions.length
+      ? activePositions.reduce((sum, position) => sum + ((Math.max(0, Number(position.fret) || 0) - 0.5) / maxFret) * 100, 0) / activePositions.length
+      : 48;
+    const palmX = Math.max(28, Math.min(72, averageX + 10));
+    const palm = leftHand.querySelector('.sim-palm');
+    const wrist = leftHand.querySelector('.sim-wrist');
+    palm?.setAttribute('cx', String(palmX));
+    wrist?.setAttribute('d', `M ${palmX - 15} 104 C ${palmX - 14} 91 ${palmX - 12} 82 ${palmX - 7} 76 L ${palmX + 9} 78 C ${palmX + 13} 87 ${palmX + 14} 96 ${palmX + 15} 104 Z`);
+    leftHand.classList.toggle('is-pressing', activePositions.length > 0);
+    leftFingerLayer.replaceChildren();
+    activePositions.slice(0, 4).forEach((position, index) => {
+      const string = Math.max(1, Math.min(6, Number(position.string) || 1));
+      const fret = Math.max(0, Number(position.fret) || 0);
+      const targetX = fret === 0 ? 2 : ((fret - 0.5) / maxFret) * 100;
+      const targetY = ((string - 0.5) / 6) * 100;
+      const fingerNumber = Math.max(1, Math.min(4, Number(position.finger) || index + 1));
+      const rootX = palmX - 10 + fingerNumber * 5;
+      const rootY = 77 - Math.abs(2.5 - fingerNumber) * 2;
+      const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      group.classList.add('sim-left-finger', `finger-${fingerNumber}`);
+      const finger = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const bendX = (rootX + targetX) / 2 + (fingerNumber - 2.5) * 2;
+      const bendY = Math.min(rootY - 12, (rootY + targetY) / 2);
+      finger.setAttribute('d', `M ${rootX} ${rootY} Q ${bendX} ${bendY} ${targetX} ${targetY}`);
+      const tip = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      tip.setAttribute('cx', String(targetX));
+      tip.setAttribute('cy', String(targetY));
+      tip.setAttribute('r', '3.8');
+      group.append(finger, tip);
+      leftFingerLayer.append(group);
+    });
+  }
+
   const targetName = note?.chord || (Number.isFinite(note?.midi) ? midiToNoteName(note.midi) : '等待当前音符');
   if (leftTitle) leftTitle.textContent = targetName;
   if (leftCopy) {
@@ -2266,6 +2305,16 @@ function renderHandGuides(note, left, right) {
   const arrow = $('[data-right-guide-arrow]');
   if (arrow) arrow.textContent = isDown ? '↓' : '↑';
   const finger = right?.finger || 'i';
+  const rightHand = $('[data-sim-right-hand]');
+  if (rightHand) {
+    const targetString = targetStrings[0] || 3;
+    rightHand.style.setProperty('--pick-y', `${((targetString - 0.5) / 6) * 100}%`);
+    rightHand.classList.toggle('is-upstroke', !isDown);
+    rightHand.dataset.activeFinger = finger;
+    rightHand.querySelectorAll('[data-pick-finger]').forEach((element) => {
+      element.classList.toggle('is-active', element.dataset.pickFinger === finger);
+    });
+  }
   if (rightTitle) rightTitle.textContent = `${isDown ? '下拨' : '上拨'} · ${finger}`;
   if (rightCopy) rightCopy.textContent = targetStrings.length
     ? `目标 ${targetStrings.join('/')} 弦 · ${PICK_NAMES[finger] || finger}`
@@ -2348,8 +2397,8 @@ function renderHandStack() {
     if (rightFinger) rightFinger.textContent = '等待当前音符';
     if (rightDetail) rightDetail.textContent = '谱面推导提示';
   }
-  if (leftConf) leftConf.textContent = state.handViewMode === 'guide' ? '谱面动作示意' : '视频同步裁切';
-  if (rightConf) rightConf.textContent = state.handViewMode === 'guide' ? '谱面动作示意' : '视频同步裁切';
+  if (leftConf) leftConf.textContent = state.handViewMode === 'guide' ? '模拟手动画' : '视频同步裁切';
+  if (rightConf) rightConf.textContent = state.handViewMode === 'guide' ? '模拟手动画' : '视频同步裁切';
   renderHandGuides(note, left, right);
   drawHandCloseups();
 }
@@ -3351,7 +3400,7 @@ function handleClick(event) {
   const handViewButton = event.target.closest('[data-hand-view]');
   if (handViewButton) {
     applyHandViewMode(handViewButton.dataset.handView, { persist: true });
-    showToast(state.handViewMode === 'zoom' ? '已切换为视频手部放大。' : '已切换为动作示意图。');
+    showToast(state.handViewMode === 'zoom' ? '已切换为视频手部放大。' : '已切换为模拟手动画。');
     return;
   }
 

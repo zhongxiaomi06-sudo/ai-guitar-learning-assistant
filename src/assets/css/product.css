@@ -2362,7 +2362,7 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
 }
 
 .hand-stack:not(.is-video-zoom) .hand-video-crop::after {
-  content: "动作示意图";
+  content: "模拟手动画";
 }
 
 .hand-pane {
@@ -2524,6 +2524,47 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
   inset: 0;
 }
 
+.simulated-left-hand {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.simulated-left-hand .sim-palm,
+.simulated-left-hand .sim-wrist,
+.sim-left-finger path,
+.sim-left-finger circle,
+.simulated-right-hand span {
+  fill: #d69a72;
+  stroke: #7e4b38;
+  stroke-width: 1.4;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .34));
+}
+
+.sim-left-finger path {
+  fill: none;
+  stroke: #d69a72;
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: d 260ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.sim-left-finger circle {
+  transition: cx 260ms cubic-bezier(.2, .8, .2, 1), cy 260ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.player-view.is-playing .simulated-left-hand.is-pressing .sim-left-finger circle {
+  animation: simulated-fret-press 520ms ease-in-out infinite alternate;
+}
+
+@keyframes simulated-fret-press {
+  to { r: 4.8; filter: drop-shadow(0 0 5px rgba(215, 156, 88, .95)); }
+}
+
 .guide-finger-dot {
   position: absolute;
   display: grid;
@@ -2572,6 +2613,54 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
   line-height: 1;
   text-shadow: 0 3px 14px rgba(0, 0, 0, .55);
   transform: translateY(-50%);
+}
+
+.simulated-right-hand {
+  --pick-y: 50%;
+  position: absolute;
+  z-index: 3;
+  top: var(--pick-y);
+  left: 56%;
+  width: 78px;
+  height: 70px;
+  pointer-events: none;
+  transform: translate(-8%, -48%) rotate(-8deg);
+  transition: top 240ms ease, transform 180ms ease;
+}
+
+.sim-right-wrist,
+.sim-right-palm,
+.sim-right-finger {
+  position: absolute;
+  display: block;
+  border: 1px solid #7e4b38;
+  background: linear-gradient(135deg, #edbc94, #bd7657);
+  box-shadow: 0 4px 9px rgba(0, 0, 0, .34);
+}
+
+.sim-right-wrist { right: -4px; bottom: 13px; width: 32px; height: 28px; border-radius: 9px; transform: rotate(-12deg); }
+.sim-right-palm { right: 17px; bottom: 14px; width: 35px; height: 39px; border-radius: 48% 45% 42% 50%; transform: rotate(-18deg); }
+.sim-right-finger { width: 10px; height: 34px; border-radius: 999px; transform-origin: 50% 90%; transition: transform 180ms ease, background 180ms ease; }
+.sim-thumb { left: 22px; top: 29px; height: 30px; transform: rotate(58deg); }
+.sim-index { left: 15px; top: 4px; transform: rotate(-21deg); }
+.sim-middle { left: 28px; top: 0; height: 38px; transform: rotate(-8deg); }
+.sim-ring { left: 41px; top: 5px; height: 34px; transform: rotate(7deg); }
+.sim-right-finger.is-active { background: #f0c09b; box-shadow: 0 0 0 3px rgba(215, 156, 88, .4), 0 4px 9px rgba(0, 0, 0, .34); }
+
+.player-view.is-playing .simulated-right-hand .sim-right-finger.is-active {
+  animation: simulated-pick-down 420ms ease-in-out infinite;
+}
+
+.player-view.is-playing .simulated-right-hand.is-upstroke .sim-right-finger.is-active {
+  animation-name: simulated-pick-up;
+}
+
+@keyframes simulated-pick-down {
+  50% { transform: rotate(18deg) translateY(10px); }
+}
+
+@keyframes simulated-pick-up {
+  50% { transform: rotate(-24deg) translateY(-10px); }
 }
 
 .hand-crop-placeholder {
