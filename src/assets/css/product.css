@@ -4081,29 +4081,29 @@ a:focus-visible {
 
   .practice-board .player-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.7fr) minmax(150px, .8fr);
     height: auto;
   }
 
-  .workspace-shell[data-mobile-view="teacher"] .hand-stack,
-  .workspace-shell[data-mobile-view="left"] .teacher-pane,
-  .workspace-shell[data-mobile-view="right"] .teacher-pane {
+  .mobile-view-switch {
     display: none;
   }
 
-  .workspace-shell[data-mobile-view="left"] .hand-stack,
-  .workspace-shell[data-mobile-view="right"] .hand-stack {
-    display: block;
+  .workspace-shell[data-mobile-view] .teacher-pane {
+    display: grid;
     height: 100%;
   }
 
-  .workspace-shell[data-mobile-view="left"] .right-hand-pane,
-  .workspace-shell[data-mobile-view="right"] .left-hand-pane {
-    display: none;
+  .workspace-shell[data-mobile-view] .hand-stack {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    height: 100%;
   }
 
-  .workspace-shell[data-mobile-view="left"] .left-hand-pane,
-  .workspace-shell[data-mobile-view="right"] .right-hand-pane {
+  .workspace-shell[data-mobile-view] .left-hand-pane,
+  .workspace-shell[data-mobile-view] .right-hand-pane {
+    display: grid;
     height: 100%;
   }
 

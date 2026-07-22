@@ -31,6 +31,13 @@ test('mobile practice view exposes teacher, left-hand, and right-hand modes', ()
   assert.match(css, /orientation:\s*landscape/);
 });
 
+test('phone landscape shows teacher, left hand, and right hand together', () => {
+  assert.match(css, /orientation:\s*landscape[\s\S]*?\.workspace-shell\[data-mobile-view\] \.teacher-pane\s*{[\s\S]*?display:\s*grid/);
+  assert.match(css, /orientation:\s*landscape[\s\S]*?\.workspace-shell\[data-mobile-view\] \.hand-stack\s*{[\s\S]*?display:\s*grid/);
+  assert.match(css, /orientation:\s*landscape[\s\S]*?\.workspace-shell\[data-mobile-view\] \.left-hand-pane,[\s\S]*?\.right-hand-pane\s*{[\s\S]*?display:\s*grid/);
+  assert.match(mobilePrototype, /orientation:\s*landscape[\s\S]*?\.media-view, \.media-view\.active\s*{[\s\S]*?display:\s*block/);
+});
+
 test('standalone mobile prototype includes every clickable practice stage', () => {
   for (const screen of ['upload', 'analysis', 'practice', 'focus', 'results']) {
     assert.match(mobilePrototype, new RegExp(`data-screen="${screen}"`));
