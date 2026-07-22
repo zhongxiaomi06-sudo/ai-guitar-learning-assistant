@@ -103,6 +103,9 @@ const state = {
   voiceRecording: false,
   voiceProcessing: false,
   voiceWakeWord: false,
+  timelineZoomIndex: 2,
+  timelineWindowStart: -1,
+  timelineWindowEnd: -1,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -177,6 +180,7 @@ function activateView(view) {
   document.title = `${titles[view]} · 弦间`;
 
   $$('video').forEach((video) => video.pause());
+  setVideoSources();
   if (view !== 'analysis') {
     window.clearInterval(state.analysisTimer);
     state.analysisTimer = null;
@@ -270,6 +274,8 @@ function updateStartAnalysisButton() {
 
 function resetPlaybackState() {
   state.playerTime = 0;
+  state.timelineWindowStart = -1;
+  state.timelineWindowEnd = -1;
   state.loopEnabled = false;
   state.lastDetection = null;
   $('[data-seek-track]')?.classList.remove('is-looping');
@@ -410,27 +416,39 @@ function updateCourseCopy() {
 function setVideoSources() {
   const mediaSource = state.videoUrl || state.remoteVideoUrl;
   const mappings = [
-    ['analysisVideo', '.media-stage'],
-    ['overviewVideo', '.overview-art'],
-    ['playerVideo', '.teacher-video'],
+    ['analysisVideo', '.media-stage', 'analysis', 'metadata'],
+    ['overviewVideo', '.overview-art', 'overview', 'metadata'],
+    ['playerVideo', '.teacher-video', 'player', 'auto'],
   ];
 
-  mappings.forEach(([id, parentSelector]) => {
+  mappings.forEach(([id, parentSelector, ownerView, preload]) => {
     const video = document.getElementById(id);
     const parent = $(parentSelector);
     const fallback = parent?.querySelector('[data-video-fallback]');
     if (!video) return;
-    if (mediaSource) {
-      video.src = mediaSource;
+    const shouldLoad = Boolean(mediaSource) && state.view === ownerView;
+    if (shouldLoad) {
+      video.preload = preload;
+      if (video.getAttribute('src') !== mediaSource) {
+        video.src = mediaSource;
+        video.load();
+      }
       video.hidden = false;
-      video.load();
       if (fallback) fallback.hidden = true;
     } else {
       video.pause();
-      video.removeAttribute('src');
-      video.load();
+      if (video.hasAttribute('src')) {
+        video.removeAttribute('src');
+        video.load();
+      }
       video.hidden = true;
       if (fallback) fallback.hidden = false;
+      if (id === 'playerVideo') {
+        $$('[data-hand-canvas]').forEach((canvas) => {
+          canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height);
+          canvas.parentElement?.classList.remove('has-frame');
+        });
+      }
     }
   });
 }
@@ -488,35 +506,120 @@ function scoreEvents(score) {
   return events.sort((left, right) => left.startTime - right.startTime);
 }
 
-function renderTimeline() {
-  const events = timelineEvents(state.timeline).slice(0, 128);
-  renderTabEvents(events);
+const TIMELINE_BAR_COUNTS = [16, 10, 6, 4];
+
+function getTimelineBarDuration() {
+  const bars = Array.isArray(state.score?.bars) ? state.score.bars : [];
+  const durations = bars
+    .map((bar) => Number(bar?.endTime) - Number(bar?.startTime))
+    .filter((duration) => Number.isFinite(duration) && duration > 0.2 && duration < 30)
+    .sort((left, right) => left - right);
+  if (durations.length) return durations[Math.floor(durations.length / 2)];
+  const numerator = Number(String(state.timeSignature || '4/4').split('/')[0]) || 4;
+  return Math.max(0.8, Math.min(12, numerator * 60 / Math.max(30, Number(state.bpm) || 92)));
+}
+
+function getTimelineWindow() {
+  const barDuration = getTimelineBarDuration();
+  const barCount = TIMELINE_BAR_COUNTS[state.timelineZoomIndex] || 6;
+  const windowDuration = Math.min(Math.max(barDuration * barCount, 4), Math.max(4, state.duration));
+  const maximumStart = Math.max(0, state.duration - windowDuration);
+  const desiredStart = Math.max(0, state.playerTime - windowDuration * 0.22);
+  const start = Math.min(maximumStart, Math.floor(desiredStart / barDuration) * barDuration);
+  return { start, end: Math.min(state.duration, start + windowDuration), barDuration, barCount };
+}
+
+function timelinePosition(time, windowStart, windowEnd) {
+  const span = Math.max(0.001, windowEnd - windowStart);
+  return Math.max(0, Math.min(100, (Number(time) - windowStart) / span * 100));
+}
+
+function renderTimelineTracks(windowStart, windowEnd, visibleEvents) {
+  const measureTrack = $('[data-measure-track]');
+  const chordTrack = $('[data-chord-track]');
+  const bars = Array.isArray(state.score?.bars) ? state.score.bars : [];
+  if (measureTrack) {
+    measureTrack.replaceChildren();
+    bars.forEach((bar, index) => {
+      const startTime = Number(bar?.startTime);
+      const endTime = Number(bar?.endTime);
+      if (!Number.isFinite(startTime) || startTime >= windowEnd || endTime <= windowStart) return;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.seek = String(startTime);
+      button.textContent = String(Number(bar?.index ?? (index + 1))).padStart(2, '0');
+      button.style.left = `${timelinePosition(startTime, windowStart, windowEnd)}%`;
+      button.style.width = `${Math.max(4, timelinePosition(endTime, windowStart, windowEnd) - timelinePosition(startTime, windowStart, windowEnd))}%`;
+      measureTrack.appendChild(button);
+    });
+  }
+
+  if (chordTrack) {
+    chordTrack.replaceChildren();
+    let previousChord = '';
+    visibleEvents.forEach((event) => {
+      const chord = typeof event.chord === 'string' ? event.chord.trim() : '';
+      if (!chord || chord === previousChord) return;
+      previousChord = chord;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.seek = String(event.startTime);
+      button.textContent = chord;
+      button.style.left = `${timelinePosition(event.startTime, windowStart, windowEnd)}%`;
+      chordTrack.appendChild(button);
+    });
+  }
+
+  const range = $('[data-timeline-range]');
+  if (range) range.textContent = `${formatTime(windowStart, true)} – ${formatTime(windowEnd, true)}`;
+  const zoom = $('[data-timeline-zoom]');
+  if (zoom) zoom.textContent = `${TIMELINE_BAR_COUNTS[state.timelineZoomIndex]} 小节`;
+
+  const waveform = $('[data-waveform].workspace-wave');
+  if (waveform) {
+    const barsInWave = $$('.wave-bar', waveform);
+    barsInWave.forEach((bar, index) => {
+      const sampleTime = windowStart + (index / Math.max(1, barsInWave.length - 1)) * (windowEnd - windowStart);
+      const harmonic = Math.abs(Math.sin(sampleTime * 1.73) * 0.58 + Math.sin(sampleTime * 0.41) * 0.28);
+      bar.style.setProperty('--height', `${15 + harmonic * 78}%`);
+    });
+  }
+}
+
+function renderTimeline(force = false) {
+  const source = state.timeline.length > 0 ? timelineEvents(state.timeline) : scoreEvents(state.score);
+  const windowState = getTimelineWindow();
+  if (!force && Math.abs(windowState.start - state.timelineWindowStart) < 0.001
+    && Math.abs(windowState.end - state.timelineWindowEnd) < 0.001) return;
+  state.timelineWindowStart = windowState.start;
+  state.timelineWindowEnd = windowState.end;
+  const visibleEvents = source.filter((event) => event.startTime >= windowState.start && event.startTime < windowState.end);
+  renderTabEvents(visibleEvents, windowState.start, windowState.end);
+  renderTimelineTracks(windowState.start, windowState.end, visibleEvents);
 }
 
 function renderScore(score) {
   if (state.timeline.length > 0) {
-    renderTimeline();
+    renderTimeline(true);
     return;
   }
-  const events = scoreEvents(score).slice(0, 48);
-  renderTabEvents(events);
+  state.score = score;
+  renderTimeline(true);
 }
 
-function renderTabEvents(events) {
-  if (!events.length) return;
+function renderTabEvents(events, windowStart = 0, windowEnd = state.duration) {
   const tablature = $('[data-tablature]');
   const playhead = $('[data-score-playhead]');
   if (!tablature || !playhead) return;
   $$('.tab-event', tablature).forEach((event) => event.remove());
-  const lastEvent = events[events.length - 1];
-  const duration = Math.max(1, state.duration, lastEvent?.startTime || 0);
+  if (!events.length) return;
   events.forEach((event) => {
     const button = document.createElement('button');
     button.className = 'tab-event';
     button.type = 'button';
     button.dataset.seek = String(event.startTime);
     if (event.id) button.dataset.eventId = String(event.id);
-    button.style.setProperty('--x', `${Math.max(3, Math.min(96, event.startTime / duration * 100)).toFixed(2)}%`);
+    button.style.setProperty('--x', `${Math.max(1, Math.min(99, timelinePosition(event.startTime, windowStart, windowEnd))).toFixed(2)}%`);
     button.style.setProperty('--y', String(event.stringNumber));
     button.textContent = String(event.fret);
     button.setAttribute('aria-label', `${event.stringNumber} 弦 ${event.fret} 品，${formatTime(event.startTime, true)}`);
@@ -1617,6 +1720,7 @@ function seekPlayer(seconds) {
     state.simulator.reset();
   }
   state.playerTime = target;
+  state.currentNote = state.scoreModel ? state.scoreModel.getNoteAtTime(state.playerTime) : null;
   const video = $('#playerVideo');
   if ((state.videoUrl || state.remoteVideoUrl) && video && Number.isFinite(video.duration)) {
     video.currentTime = Math.min(state.playerTime, video.duration);
@@ -1643,9 +1747,55 @@ function getCurrentSegmentStart() {
 const FINGER_NAMES = { 0: '空弦', 1: '食指', 2: '中指', 3: '无名指', 4: '小指' };
 const PICK_NAMES = { P: '拇指', i: '食指', m: '中指', a: '无名指' };
 
+function drawHandCloseups() {
+  const video = $('#playerVideo');
+  if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
+  const crops = {
+    // 示例视频：按弦手位于画面右侧指板，拨弦手位于左下音孔。
+    left: { x: 0.66, y: 0.38, width: 0.33, height: 0.5 },
+    right: { x: 0.08, y: 0.38, width: 0.4, height: 0.48 },
+  };
+  $$('[data-hand-canvas]').forEach((canvas) => {
+    const crop = crops[canvas.dataset.handCanvas];
+    const bounds = canvas.getBoundingClientRect();
+    if (!crop || bounds.width < 2 || bounds.height < 2) return;
+    const ratio = Math.min(2, window.devicePixelRatio || 1);
+    const targetWidth = Math.max(1, Math.round(bounds.width * ratio));
+    const targetHeight = Math.max(1, Math.round(bounds.height * ratio));
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+    }
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    const sourceX = video.videoWidth * crop.x;
+    const sourceY = video.videoHeight * crop.y;
+    const sourceWidth = video.videoWidth * crop.width;
+    const sourceHeight = video.videoHeight * crop.height;
+    const sourceRatio = sourceWidth / sourceHeight;
+    const targetRatio = targetWidth / targetHeight;
+    let drawX = sourceX;
+    let drawY = sourceY;
+    let drawWidth = sourceWidth;
+    let drawHeight = sourceHeight;
+    if (sourceRatio > targetRatio) {
+      drawWidth = sourceHeight * targetRatio;
+      drawX += (sourceWidth - drawWidth) / 2;
+    } else {
+      drawHeight = sourceWidth / targetRatio;
+      drawY += (sourceHeight - drawHeight) / 2;
+    }
+    try {
+      context.drawImage(video, drawX, drawY, drawWidth, drawHeight, 0, 0, targetWidth, targetHeight);
+      canvas.parentElement?.classList.add('has-frame');
+    } catch {
+      canvas.parentElement?.classList.remove('has-frame');
+    }
+  });
+}
+
 /**
- * 用当前目标音符的左右手手型数据更新双手特写面板。
- * 时间轴事件未携带手型（如仅 score 兜底）时保留静态示例文案。
+ * 画面来自原视频同步裁切；文字只呈现谱面推导，不伪装成视觉识别结果。
  */
 function renderHandStack() {
   const note = state.currentNote;
@@ -1657,7 +1807,7 @@ function renderHandStack() {
   const leftNext = $('[data-left-next]');
 
   if (left && Array.isArray(left.fingerPositions) && left.fingerPositions.length) {
-    if (leftConf) leftConf.textContent = '94%';
+    if (leftConf) leftConf.textContent = '视频同步裁切';
     if (leftFingers) {
       const fretted = left.fingerPositions.filter((p) => p.finger > 0);
       const labels = (fretted.length ? fretted : left.fingerPositions).map(
@@ -1679,8 +1829,11 @@ function renderHandStack() {
       }
       const barre = left.barreRange;
       if (barre) text = `横按 ${barre.stringStart}–${barre.stringEnd} 弦 ${barre.fret} 品 · ${text}`;
-      leftNext.textContent = text;
+      leftNext.textContent = `谱面提示：${text}`;
     }
+  } else {
+    if (leftFingers) leftFingers.innerHTML = '<span>指法信息由谱面推导，仅作辅助</span>';
+    if (leftNext) leftNext.textContent = '谱面提示：等待当前音符';
   }
 
   const rightConf = $('[data-right-confidence]');
@@ -1690,16 +1843,21 @@ function renderHandStack() {
   const rightNext = $('[data-right-next]');
 
   if (right) {
-    if (rightConf) rightConf.textContent = '91%';
+    if (rightConf) rightConf.textContent = '视频同步裁切';
     const isDown = right.direction === 'down';
     const arrow = isDown ? '↓' : '↑';
     if (rightDir) rightDir.textContent = arrow;
     const fingerKey = right.finger || 'i';
-    if (rightFinger) rightFinger.textContent = `${fingerKey} · ${PICK_NAMES[fingerKey] || fingerKey}`;
+    if (rightFinger) rightFinger.textContent = `谱面建议 ${fingerKey} · ${PICK_NAMES[fingerKey] || fingerKey}`;
     const strings = Array.isArray(right.strings) ? right.strings : [];
     if (rightDetail) rightDetail.textContent = `${isDown ? '下拨' : '上拨'} ${strings.length ? strings.join('/') : ''} 弦`;
-    if (rightNext) rightNext.textContent = '跟随节拍继续';
+    if (rightNext) rightNext.textContent = '拨弦信息由谱面推导，仅作辅助';
+  } else {
+    if (rightDir) rightDir.textContent = '·';
+    if (rightFinger) rightFinger.textContent = '等待当前音符';
+    if (rightDetail) rightDetail.textContent = '谱面推导提示';
   }
+  drawHandCloseups();
 }
 
 function updatePlayerUI() {
@@ -1717,14 +1875,16 @@ function updatePlayerUI() {
   const seekTrack = $('[data-seek-track]');
   seekTrack?.setAttribute('aria-valuenow', state.playerTime.toFixed(2));
 
+  renderTimeline();
   const timeline = $('.timeline-pane');
   const timelinePlayhead = $('[data-timeline-playhead]');
+  const timelineProgress = timelinePosition(state.playerTime, state.timelineWindowStart, state.timelineWindowEnd) / 100;
   if (timeline && timelinePlayhead) {
-    const left = 58 + Math.max(0, timeline.clientWidth - 58) * progress;
+    const left = 58 + Math.max(0, timeline.clientWidth - 58) * timelineProgress;
     timelinePlayhead.style.left = `${left}px`;
   }
   const scorePlayhead = $('[data-score-playhead]');
-  if (scorePlayhead) scorePlayhead.style.left = `${progress * 100}%`;
+  if (scorePlayhead) scorePlayhead.style.left = `${timelineProgress * 100}%`;
 
   const notes = $$('.tab-event[data-seek]');
   let nearest = null;
@@ -2238,6 +2398,21 @@ function filterLibrary(filter) {
 
 function handleAction(action, element, payload = {}) {
   switch (action) {
+    case 'timeline-zoom-in':
+      state.timelineZoomIndex = Math.min(TIMELINE_BAR_COUNTS.length - 1, state.timelineZoomIndex + 1);
+      renderTimeline(true);
+      updatePlayerUI();
+      return;
+    case 'timeline-zoom-out':
+      state.timelineZoomIndex = Math.max(0, state.timelineZoomIndex - 1);
+      renderTimeline(true);
+      updatePlayerUI();
+      return;
+    case 'timeline-zoom-reset':
+      state.timelineZoomIndex = 2;
+      renderTimeline(true);
+      updatePlayerUI();
+      return;
     case 'adjust-speed': {
       const steps = [0.5, 0.6, 0.75, 0.9, 1];
       const current = state.playerSpeed;

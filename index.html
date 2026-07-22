@@ -295,30 +295,42 @@
 
             <aside class="hand-stack" aria-label="双手动作特写">
               <article class="hand-pane left-hand-pane">
-                <header><span>左手特写</span><b data-left-confidence>94%</b></header>
-                <div class="fretboard-visual">
-                  <div class="fret-strings" aria-hidden="true"></div>
-                  <span class="finger-dot finger-one">1</span><span class="finger-dot finger-two">2</span><span class="finger-dot finger-three">3</span>
-                  <div class="motion-arrow"><small data-left-next>下一动作：向第 3 品换把</small></div>
+                <header><span>左手 · 指板</span><b data-left-confidence>视频同步裁切</b></header>
+                <div class="hand-video-crop">
+                  <canvas data-hand-canvas="left" aria-label="从原始教学视频同步裁切的左手指板画面"></canvas>
+                  <div class="hand-crop-placeholder">播放视频后显示左手画面</div>
+                  <div class="motion-arrow"><small data-left-next>谱面提示：等待当前音符</small></div>
                 </div>
-                <footer data-left-fingers><span>食指 · 2 弦 1 品</span><span>中指 · 4 弦 2 品</span></footer>
+                <footer data-left-fingers><span>指法信息由谱面推导，仅作辅助</span></footer>
               </article>
               <article class="hand-pane right-hand-pane">
-                <header><span>右手特写</span><b data-right-confidence>91%</b></header>
-                <div class="pick-visual"><strong data-right-direction>↑</strong><div><span data-right-finger>i · 食指</span><small data-right-detail>上拨 2 弦</small></div><i></i></div>
-                <footer><span data-right-next>下一次：m 指上拨 1 弦</span></footer>
+                <header><span>右手 · 音孔</span><b data-right-confidence>视频同步裁切</b></header>
+                <div class="hand-video-crop">
+                  <canvas data-hand-canvas="right" aria-label="从原始教学视频同步裁切的右手拨弦画面"></canvas>
+                  <div class="hand-crop-placeholder">播放视频后显示右手画面</div>
+                  <div class="pick-overlay"><strong data-right-direction>·</strong><div><span data-right-finger>等待当前音符</span><small data-right-detail>谱面推导提示</small></div></div>
+                </div>
+                <footer><span data-right-next>拨弦信息由谱面推导，仅作辅助</span></footer>
               </article>
             </aside>
           </div>
 
           <section class="timeline-pane" aria-label="同步谱面与时间轴">
+            <div class="timeline-toolbar">
+              <span data-timeline-range>当前谱面窗口</span>
+              <div aria-label="谱面缩放">
+                <button type="button" data-action="timeline-zoom-out" aria-label="缩小谱面">−</button>
+                <button type="button" data-action="timeline-zoom-reset" data-timeline-zoom>6 小节</button>
+                <button type="button" data-action="timeline-zoom-in" aria-label="放大谱面">＋</button>
+              </div>
+            </div>
             <div class="waveform-row">
               <span class="track-label">WAVE</span>
               <div class="workspace-wave" data-waveform></div>
               <div class="timeline-playhead" data-timeline-playhead></div>
             </div>
-            <div class="measure-row"><span class="track-label">BAR</span><div><button type="button" data-seek="0">01</button><button type="button" data-seek="6">02</button><button type="button" data-seek="12">03</button><button type="button" data-seek="18">04</button><button type="button" data-seek="24">05</button><button type="button" data-seek="30">06</button><button type="button" data-seek="36">07</button><button type="button" data-seek="42">08</button></div></div>
-            <div class="chord-row"><span class="track-label">CHORD</span><div><button class="is-past" type="button" data-seek="0">Am</button><button class="is-past" type="button" data-seek="12">C</button><button class="is-current" type="button" data-seek="24">G <small>视频指法</small></button><button type="button" data-seek="36">Em</button></div></div>
+            <div class="measure-row"><span class="track-label">BAR</span><div data-measure-track></div></div>
+            <div class="chord-row"><span class="track-label">CHORD</span><div data-chord-track></div></div>
             <div class="tablature-row">
               <span class="track-label">TAB</span>
               <div class="tablature" data-tablature>
