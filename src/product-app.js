@@ -111,6 +111,7 @@ const state = {
   layoutVideoShare: 72,
   layoutTimelineScale: 100,
   layoutLeftHandShare: 50,
+  handViewMode: 'guide',
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -127,6 +128,7 @@ function loadPreferences() {
     if (Number.isFinite(saved.layoutVideoShare)) state.layoutVideoShare = Math.max(55, Math.min(82, saved.layoutVideoShare));
     if (Number.isFinite(saved.layoutTimelineScale)) state.layoutTimelineScale = Math.max(75, Math.min(130, saved.layoutTimelineScale));
     if (Number.isFinite(saved.layoutLeftHandShare)) state.layoutLeftHandShare = Math.max(30, Math.min(70, saved.layoutLeftHandShare));
+    if (saved.handViewMode === 'guide' || saved.handViewMode === 'zoom') state.handViewMode = saved.handViewMode;
   } catch {
     // 不可用的本地状态不应阻断产品页面。
   }
@@ -143,6 +145,7 @@ function savePreferences() {
       layoutVideoShare: state.layoutVideoShare,
       layoutTimelineScale: state.layoutTimelineScale,
       layoutLeftHandShare: state.layoutLeftHandShare,
+      handViewMode: state.handViewMode,
     }));
   } catch {
     // 隐私模式可能禁用 localStorage，界面仍可正常使用。
@@ -1883,11 +1886,16 @@ const PICK_NAMES = { P: '拇指', i: '食指', m: '中指', a: '无名指' };
 function drawHandCloseups() {
   const video = $('#playerVideo');
   if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
-  const crops = {
-    // 示例视频：按弦手位于画面右侧指板，拨弦手位于左下音孔。
-    left: { x: 0.66, y: 0.38, width: 0.33, height: 0.5 },
-    right: { x: 0.08, y: 0.38, width: 0.4, height: 0.48 },
-  };
+  const crops = state.handViewMode === 'zoom'
+    ? {
+      left: { x: 0.705, y: 0.45, width: 0.24, height: 0.36 },
+      right: { x: 0.14, y: 0.45, width: 0.28, height: 0.34 },
+    }
+    : {
+      // 示例视频：按弦手位于画面右侧指板，拨弦手位于左下音孔。
+      left: { x: 0.66, y: 0.38, width: 0.33, height: 0.5 },
+      right: { x: 0.08, y: 0.38, width: 0.4, height: 0.48 },
+    };
   $$('[data-hand-canvas]').forEach((canvas) => {
     const crop = crops[canvas.dataset.handCanvas];
     const bounds = canvas.getBoundingClientRect();
@@ -1925,6 +1933,19 @@ function drawHandCloseups() {
       canvas.parentElement?.classList.remove('has-frame');
     }
   });
+}
+
+function applyHandViewMode(mode = state.handViewMode, { persist = false } = {}) {
+  state.handViewMode = mode === 'zoom' ? 'zoom' : 'guide';
+  const stack = $('.hand-stack');
+  stack?.classList.toggle('is-video-zoom', state.handViewMode === 'zoom');
+  $$('[data-hand-view]').forEach((button) => {
+    const active = button.dataset.handView === state.handViewMode;
+    button.classList.toggle('is-active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  drawHandCloseups();
+  if (persist) savePreferences();
 }
 
 /**
@@ -2876,6 +2897,13 @@ function handleClick(event) {
     return;
   }
 
+  const handViewButton = event.target.closest('[data-hand-view]');
+  if (handViewButton) {
+    applyHandViewMode(handViewButton.dataset.handView, { persist: true });
+    showToast(state.handViewMode === 'zoom' ? '已切换为视频手部放大。' : '已切换为动作提示。');
+    return;
+  }
+
   const filterButton = event.target.closest('[data-filter]');
   if (filterButton) filterLibrary(filterButton.dataset.filter);
 }
@@ -3030,6 +3058,7 @@ function bootstrap() {
   initVoiceControl();
   initEvents();
   initPanelResizers();
+  applyHandViewMode();
   updateCourseCopy();
   updateMicrophoneUI();
   updateVoiceUI();

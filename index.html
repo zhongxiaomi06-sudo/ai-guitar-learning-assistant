@@ -303,6 +303,13 @@
             <button class="panel-resize-handle" type="button" data-layout-resizer="video" aria-label="拖动调整主视频和手部面板宽度" title="拖动调整面板宽度，双击恢复默认"></button>
 
             <aside class="hand-stack" aria-label="双手动作特写">
+              <div class="hand-mode-toolbar">
+                <span>手部视图</span>
+                <div role="group" aria-label="手部动作显示模式">
+                  <button class="is-active" type="button" data-hand-view="guide" aria-pressed="true">动作提示</button>
+                  <button type="button" data-hand-view="zoom" aria-pressed="false">视频放大</button>
+                </div>
+              </div>
               <article class="hand-pane left-hand-pane">
                 <header><span>左手 · 指板</span><b data-left-confidence>视频同步裁切</b></header>
                 <div class="hand-video-crop">
