@@ -62,6 +62,11 @@
               <div><strong>02</strong><span>音画同步</span></div>
               <div><strong>03</strong><span>实时纠错</span></div>
             </div>
+            <button class="beginner-entry" type="button" data-action="open-beginner">
+              <span class="beginner-entry-mark" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><b>?</b></span>
+              <span><small data-beginner-entry-status>3 分钟 · 只学马上要用的</small><strong>第一次拿吉他？从这里开始</strong></span>
+              <span aria-hidden="true">→</span>
+            </button>
           </div>
 
           <div class="upload-composition">
@@ -545,6 +550,156 @@
         <div class="setting-block"><div><strong>界面模式</strong><span>选择适合当前环境的对比度</span></div><div class="segmented-control"><button class="is-active" type="button" data-theme-choice="light">暖纸</button><button type="button" data-theme-choice="dark">夜间</button></div></div>
         <div class="settings-foot"><span class="status-dot"></span><p><strong data-mic-label>麦克风未开启</strong><small>开始跟练时可进行环境校准</small></p><button type="button" data-action="open-mic">设置</button></div>
       </aside>
+    </div>
+    <div class="beginner-layer" data-beginner-layer hidden>
+      <div class="modal-backdrop" data-action="close-beginner"></div>
+      <section class="beginner-tutorial" role="dialog" aria-modal="true" aria-labelledby="beginnerTitle">
+        <header class="beginner-header">
+          <div>
+            <p class="eyebrow"><span></span>TRUE BEGINNER</p>
+            <h2 id="beginnerTitle">真·新手上手</h2>
+            <p>不会认弦、不会按，也没关系。这里只讲跟练前必须会的。</p>
+          </div>
+          <button class="modal-close" type="button" data-action="close-beginner" aria-label="关闭新手教程">×</button>
+        </header>
+
+        <div class="beginner-progress-row">
+          <div class="beginner-progress-copy"><span>必要基础</span><strong data-beginner-count>1 / 6</strong></div>
+          <div class="beginner-progress" aria-hidden="true"><i data-beginner-progress style="--value:17%"></i></div>
+          <nav class="beginner-steps" aria-label="新手教程步骤">
+            <button class="is-active" type="button" data-action="beginner-step" data-beginner-step="0" aria-label="第 1 步，拿稳吉他"><span>1</span><small>拿琴</small></button>
+            <button type="button" data-action="beginner-step" data-beginner-step="1" aria-label="第 2 步，认识琴弦"><span>2</span><small>认弦</small></button>
+            <button type="button" data-action="beginner-step" data-beginner-step="2" aria-label="第 3 步，按响一个音"><span>3</span><small>按响</small></button>
+            <button type="button" data-action="beginner-step" data-beginner-step="3" aria-label="第 4 步，看懂六线谱"><span>4</span><small>看谱</small></button>
+            <button type="button" data-action="beginner-step" data-beginner-step="4" aria-label="第 5 步，认识右手和节拍"><span>5</span><small>拨弦</small></button>
+            <button type="button" data-action="beginner-step" data-beginner-step="5" aria-label="第 6 步，开始前检查"><span>6</span><small>开始</small></button>
+          </nav>
+        </div>
+
+        <div class="beginner-stage">
+          <article class="beginner-panel" data-beginner-panel="0">
+            <div class="beginner-visual hold-visual" aria-hidden="true">
+              <div class="hold-person"><i></i><b></b></div>
+              <div class="hold-guitar"><i></i><b></b><span></span></div>
+              <small>琴身贴近身体 · 琴颈稍微抬高</small>
+            </div>
+            <div class="beginner-copy">
+              <p class="lesson-number">01 · 先让双手能自由动</p>
+              <h3>拿稳就行，不用先追求“标准姿势”</h3>
+              <ul>
+                <li><strong>常见右手琴：</strong>琴颈朝左，左手按弦，右手拨弦；左手琴则相反。</li>
+                <li><strong>坐稳：</strong>琴腰放在腿上，琴身轻贴身体，不要耸肩夹琴。</li>
+                <li><strong>留出空间：</strong>左手只扶琴颈，不要靠手掌把琴颈攥死。</li>
+              </ul>
+              <div class="beginner-micro-task"><span>现在做</span><p>松开左手，琴仍不会掉；再把左手轻轻放回琴颈。</p></div>
+            </div>
+          </article>
+
+          <article class="beginner-panel" data-beginner-panel="1" hidden>
+            <div class="beginner-visual string-map" aria-label="六线谱琴弦顺序示意">
+              <div><span>1</span><i></i><strong>E</strong><small>最细</small></div>
+              <div><span>2</span><i></i><strong>B</strong></div>
+              <div><span>3</span><i></i><strong>G</strong></div>
+              <div><span>4</span><i></i><strong>D</strong></div>
+              <div><span>5</span><i></i><strong>A</strong></div>
+              <div><span>6</span><i></i><strong>E</strong><small>最粗</small></div>
+            </div>
+            <div class="beginner-copy">
+              <p class="lesson-number">02 · 六根弦和一排格子</p>
+              <h3>先记住：1 弦最细，6 弦最粗</h3>
+              <ul>
+                <li><strong>弦：</strong>从最细的 1 弦数到最粗的 6 弦。</li>
+                <li><strong>品格：</strong>琴颈上的金属条叫品丝，两条品丝之间是一格。</li>
+                <li><strong>第几品：</strong>从琴头往琴身方向数格子；第一格就是 1 品。</li>
+              </ul>
+              <div class="beginner-micro-task"><span>现在做</span><p>找到最细的 1 弦，再沿琴颈指出第 1、2、3 品。</p></div>
+            </div>
+          </article>
+
+          <article class="beginner-panel" data-beginner-panel="2" hidden>
+            <div class="beginner-visual press-visual" aria-hidden="true">
+              <div class="mini-fret"><i></i><i></i><i></i><span></span><b>指尖</b></div>
+              <div class="press-result"><span>✓</span><strong>靠近品丝，但不要压住品丝</strong><small>手指立起来，别碰到旁边的弦</small></div>
+            </div>
+            <div class="beginner-copy">
+              <p class="lesson-number">03 · 先只按响一个音</p>
+              <h3>按在格子里、靠近琴身那侧的金属条</h3>
+              <ul>
+                <li>用<strong>指尖</strong>按弦，不用指肚平躺着压。</li>
+                <li>手指放在品格内，靠近下一根品丝，但<strong>不要压在金属线上</strong>。</li>
+                <li>右手拨一下；声音闷或打品时，先调整位置，再稍微加力。</li>
+              </ul>
+              <div class="beginner-micro-task"><span>现在做</span><p>用左手食指按住 1 弦 1 品，右手拨 1 弦，直到声音清楚持续。</p></div>
+            </div>
+          </article>
+
+          <article class="beginner-panel" data-beginner-panel="3" hidden>
+            <div class="beginner-visual tab-visual" aria-label="最小六线谱读法示意">
+              <div><span>1</span><i></i><b>0</b><b>1</b><b>3</b></div>
+              <div><span>2</span><i></i><b class="tab-muted">×</b></div>
+              <div><span>3</span><i></i></div>
+              <div><span>4</span><i></i></div>
+              <div><span>5</span><i></i></div>
+              <div><span>6</span><i></i></div>
+            </div>
+            <div class="beginner-copy">
+              <p class="lesson-number">04 · 六线谱只看三件事</p>
+              <h3>哪根弦、按第几品、什么时候弹</h3>
+              <ul>
+                <li><strong>六条横线：</strong>最上面是最细的 1 弦，最下面是最粗的 6 弦。</li>
+                <li><strong>数字：</strong>数字 3 就按第 3 品；数字 0 表示不按，直接弹空弦。</li>
+                <li><strong>从左往右：</strong>播放光标走到数字时，就弹那个音；× 表示这根弦不要响。</li>
+              </ul>
+              <div class="beginner-micro-task"><span>不用背</span><p>现在不需要认识五线谱、音名、调式或和声，只需照数字找到弦和品。</p></div>
+            </div>
+          </article>
+
+          <article class="beginner-panel" data-beginner-panel="4" hidden>
+            <div class="beginner-visual rhythm-visual" aria-hidden="true">
+              <div class="pick-symbols"><span><b>↓</b><small>向下</small></span><span><b>↑</b><small>向上</small></span><span><b>P</b><small>拇指</small></span><span><b>i</b><small>食指</small></span></div>
+              <div class="count-strip"><span>1</span><i></i><span>2</span><i></i><span>3</span><i></i><span>4</span></div>
+            </div>
+            <div class="beginner-copy">
+              <p class="lesson-number">05 · 右手只跟两个提示</p>
+              <h3>看方向，跟着 1、2、3、4</h3>
+              <ul>
+                <li><strong>↓ / ↑：</strong>表示向下拨或向上拨；先追求方向对，不必追求速度。</li>
+                <li><strong>P / i / m / a：</strong>依次表示拇指、食指、中指、无名指。</li>
+                <li><strong>四拍：</strong>界面数到 1、2、3、4；光标到目标时再弹，不要抢在前面。</li>
+              </ul>
+              <div class="beginner-micro-task"><span>现在做</span><p>右手轻碰琴弦，慢慢做“下、上、下、上”，同时数 1、2、3、4。</p></div>
+            </div>
+          </article>
+
+          <article class="beginner-panel" data-beginner-panel="5" hidden>
+            <div class="beginner-visual ready-visual" aria-hidden="true">
+              <div><span>✓</span><p><strong>先调音</strong><small>6 → 1 弦：E A D G B E</small></p></div>
+              <div><span>✓</span><p><strong>允许麦克风</strong><small>让系统听到你，而不是只听到视频</small></p></div>
+              <div><span>✓</span><p><strong>从慢速开始</strong><small>先按响，再追速度</small></p></div>
+            </div>
+            <div class="beginner-copy">
+              <p class="lesson-number">06 · 你已经够资格开始了</p>
+              <h3>开始前，只检查调音和收音</h3>
+              <ul>
+                <li>用任意调音器把弦调准；不准的琴会让正确按法也被判成错音。</li>
+                <li>允许麦克风并完成环境检查，尽量让教学视频声音不要直接灌进麦克风。</li>
+                <li>看不懂时停下来点谱面或动作示意；先把一个音弹清楚，再继续。</li>
+              </ul>
+              <div class="beginner-ready-actions">
+                <button class="secondary-button" type="button" data-action="beginner-demo">用示例课程试一次 →</button>
+                <small>以后想复习，首页入口一直都在。</small>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <footer class="beginner-footer">
+          <button class="text-button" type="button" data-action="beginner-prev" disabled>← 上一步</button>
+          <p><strong>只学必须项</strong><span>不会讲暂时用不到的乐理</span></p>
+          <button class="primary-button" type="button" data-action="beginner-next">下一步 <span>→</span></button>
+          <button class="primary-button" type="button" data-action="finish-beginner" hidden>完成准备 <span>✓</span></button>
+        </footer>
+      </section>
     </div>
     <div class="voice-help-layer" data-voice-help hidden>
       <div class="modal-backdrop" data-action="close-voice-help"></div>

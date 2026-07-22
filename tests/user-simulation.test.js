@@ -22,6 +22,28 @@ function makeEngine() {
   return new MatchingEngine(new TimelineModel(TIMELINE));
 }
 
+test('TimelineModel exposes the same notes collection used by player scoring', () => {
+  const model = new TimelineModel(TIMELINE);
+
+  assert.equal(model.notes, model.noteEvents);
+  assert.equal(model.notes.length, TIMELINE.length);
+  assert.ok(model.notes.every((note) => Number.isFinite(note.endTime)));
+});
+
+test('TimelineModel keeps display metadata when simultaneous notes form a chord', () => {
+  const model = new TimelineModel([
+    { ...TIMELINE[0], id: 'am-1', chord: 'Am', leftHandShape: { type: 'chord' }, rightHandShape: { direction: 'down' } },
+    { ...TIMELINE[0], id: 'am-2', string: 2, fret: 1, pitch: 60, chord: 'Am' },
+  ]);
+
+  const chord = model.getNoteAtTime(1.05);
+  assert.equal(chord.type, 'chord');
+  assert.equal(chord.chord, 'Am');
+  assert.equal(chord.notes.length, 2);
+  assert.deepEqual(chord.leftHandShape, { type: 'chord' });
+  assert.deepEqual(chord.rightHandShape, { direction: 'down' });
+});
+
 /**
  * 用一个全新模拟器在指定视频时间产生一次检测，并交给匹配引擎判定。
  * 模拟 product-app.playerFrame 的调用方式：getDetection(playerTime) → match(playerTime, playedNote)。

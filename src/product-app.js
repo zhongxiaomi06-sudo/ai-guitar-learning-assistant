@@ -9,6 +9,7 @@ import { MatchingEngine } from './core/matching/engine.js';
 import { FocusStateMachine, SpeedAction, summarizeAttempt } from './core/practice/stateMachine.js';
 import { UserSimulator } from './core/practice/simulator.js';
 import { scorePracticeResults } from './core/practice/scoring.js';
+import { beginnerProgress, moveBeginnerStep, normalizeBeginnerStep } from './core/practice/beginner.js';
 import { ScoreModel } from './core/score/model.js';
 import { TimelineModel } from './core/score/timelineModel.js';
 import { VoiceController } from './core/voice/controller.js';
@@ -116,6 +117,8 @@ const state = {
   scoringPass: 0,
   lastScoringTime: 0,
   scoreHistory: {},
+  beginnerStep: 0,
+  beginnerComplete: false,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -134,6 +137,7 @@ function loadPreferences() {
     if (Number.isFinite(saved.layoutLeftHandShare)) state.layoutLeftHandShare = Math.max(30, Math.min(70, saved.layoutLeftHandShare));
     if (saved.handViewMode === 'guide' || saved.handViewMode === 'zoom') state.handViewMode = saved.handViewMode;
     if (saved.scoreHistory && typeof saved.scoreHistory === 'object') state.scoreHistory = saved.scoreHistory;
+    if (typeof saved.beginnerComplete === 'boolean') state.beginnerComplete = saved.beginnerComplete;
   } catch {
     // 不可用的本地状态不应阻断产品页面。
   }
@@ -152,6 +156,7 @@ function savePreferences() {
       layoutLeftHandShare: state.layoutLeftHandShare,
       handViewMode: state.handViewMode,
       scoreHistory: state.scoreHistory,
+      beginnerComplete: state.beginnerComplete,
     }));
   } catch {
     // 隐私模式可能禁用 localStorage，界面仍可正常使用。
@@ -2721,6 +2726,62 @@ function exitFocusMode() {
   if (comparison) comparison.hidden = true;
 }
 
+function renderBeginnerTutorial() {
+  const progress = beginnerProgress(state.beginnerStep);
+  $$('[data-beginner-panel]').forEach((panel) => {
+    const active = Number(panel.dataset.beginnerPanel) === state.beginnerStep;
+    panel.hidden = !active;
+    panel.setAttribute('aria-hidden', String(!active));
+  });
+  $$('[data-beginner-step]').forEach((button) => {
+    const step = Number(button.dataset.beginnerStep);
+    const active = step === state.beginnerStep;
+    button.classList.toggle('is-active', active);
+    button.classList.toggle('is-complete', step < state.beginnerStep || state.beginnerComplete);
+    if (active) button.setAttribute('aria-current', 'step');
+    else button.removeAttribute('aria-current');
+  });
+
+  const count = $('[data-beginner-count]');
+  const bar = $('[data-beginner-progress]');
+  const previous = $('[data-action="beginner-prev"]');
+  const next = $('[data-action="beginner-next"]');
+  const finish = $('[data-action="finish-beginner"]');
+  if (count) count.textContent = `${progress.current} / ${progress.total}`;
+  if (bar) bar.style.setProperty('--value', `${progress.percent}%`);
+  if (previous) previous.disabled = progress.isFirst;
+  if (next) next.hidden = progress.isLast;
+  if (finish) finish.hidden = !progress.isLast;
+
+  $$('[data-beginner-entry-status]').forEach((label) => {
+    label.textContent = state.beginnerComplete ? '基础已完成 · 随时复习' : '3 分钟 · 只学马上要用的';
+  });
+}
+
+function openBeginnerTutorial() {
+  state.beginnerStep = 0;
+  renderBeginnerTutorial();
+  openLayer($('[data-beginner-layer]'));
+}
+
+function finishBeginnerTutorial({ startDemo = false } = {}) {
+  state.beginnerComplete = true;
+  savePreferences();
+  renderBeginnerTutorial();
+  closeLayer($('[data-beginner-layer]'));
+  showToast('准备完成：现在可以直接照着谱面和动作提示练习。');
+  if (startDemo) void prepareDemo();
+}
+
+function managedLayers() {
+  return [
+    $('[data-mic-modal]'),
+    $('[data-settings-layer]'),
+    $('[data-voice-help]'),
+    $('[data-beginner-layer]'),
+  ].filter(Boolean);
+}
+
 function openLayer(layer) {
   if (!layer) return;
   state.lastFocused = document.activeElement;
@@ -2739,14 +2800,14 @@ function closeLayer(layer, restoreFocus = true) {
     state.pendingView = null;
   }
   layer.hidden = true;
-  if ($('[data-mic-modal]').hidden && $('[data-settings-layer]').hidden && $('[data-voice-help]').hidden) {
+  if (managedLayers().every((candidate) => candidate.hidden)) {
     document.body.style.overflow = '';
   }
   if (restoreFocus && state.lastFocused instanceof HTMLElement) state.lastFocused.focus();
 }
 
 function activeLayer() {
-  return [$('[data-mic-modal]'), $('[data-settings-layer]'), $('[data-voice-help]')].find((layer) => layer && !layer.hidden) || null;
+  return managedLayers().find((layer) => !layer.hidden) || null;
 }
 
 function trapFocus(event) {
@@ -2789,6 +2850,30 @@ function filterLibrary(filter) {
 
 function handleAction(action, element, payload = {}) {
   switch (action) {
+    case 'open-beginner':
+      openBeginnerTutorial();
+      return;
+    case 'close-beginner':
+      closeLayer($('[data-beginner-layer]'));
+      return;
+    case 'beginner-prev':
+      state.beginnerStep = moveBeginnerStep(state.beginnerStep, -1);
+      renderBeginnerTutorial();
+      return;
+    case 'beginner-next':
+      state.beginnerStep = moveBeginnerStep(state.beginnerStep, 1);
+      renderBeginnerTutorial();
+      return;
+    case 'beginner-step':
+      state.beginnerStep = normalizeBeginnerStep(element.dataset.beginnerStep);
+      renderBeginnerTutorial();
+      return;
+    case 'finish-beginner':
+      finishBeginnerTutorial();
+      return;
+    case 'beginner-demo':
+      finishBeginnerTutorial({ startDemo: true });
+      return;
     case 'timeline-zoom-in':
       state.timelineZoomIndex = Math.min(TIMELINE_BAR_COUNTS.length - 1, state.timelineZoomIndex + 1);
       renderTimeline(true);
@@ -3197,6 +3282,7 @@ function initEvents() {
 
 function bootstrap() {
   loadPreferences();
+  renderBeginnerTutorial();
   applyLayoutPreferences();
   // ?sim=<mode> 开启 MIDI/程序化用户模拟，替代真实麦克风监听。
   // 支持 perfect / miss / late50 / late100 / late200 / early50 / early100 /

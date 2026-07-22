@@ -33,6 +33,11 @@ export class TimelineModel {
       .map((e) => this._normalize(e))
       .filter(Boolean)
       .sort((a, b) => a.startTime - b.startTime);
+
+    // Keep the same public collection contract as ScoreModel. Player scoring
+    // consumes either model interchangeably and must not depend on the
+    // timeline adapter's internal `noteEvents` name.
+    this.notes = this.noteEvents;
   }
 
   _normalize(event) {
@@ -83,15 +88,22 @@ export class TimelineModel {
     if (candidates.length === 1) return candidates[0];
 
     // 同时发声：合并为和弦对象
+    const representative = candidates[0];
     return {
-      id: `chord-${candidates[0].startTime}`,
+      id: `chord-${representative.startTime}`,
       type: 'chord',
-      startTime: candidates[0].startTime,
+      startTime: representative.startTime,
       endTime: Math.max(...candidates.map((n) => n.endTime)),
       notes: candidates.map((n) => ({ string: n.string, fret: n.fret, midi: n.midi })),
-      measureIndex: candidates[0].measureIndex,
-      beatPosition: candidates[0].beatPosition,
-      tolerance: candidates[0].tolerance,
+      midi: representative.midi,
+      string: representative.string,
+      fret: representative.fret,
+      chord: candidates.find((note) => note.chord)?.chord,
+      leftHandShape: representative.leftHandShape,
+      rightHandShape: representative.rightHandShape,
+      measureIndex: representative.measureIndex,
+      beatPosition: representative.beatPosition,
+      tolerance: representative.tolerance,
     };
   }
 
