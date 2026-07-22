@@ -166,70 +166,96 @@
           </div>
         </div>
 
-        <div class="player-grid">
-          <section class="teacher-pane" aria-label="原始教学视频">
-            <div class="teacher-video">
-              <video id="playerVideo" playsinline hidden></video>
-              <div class="abstract-video player-fallback" data-video-fallback>
-                <div class="guitar-neck" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-                <div class="player-silhouette" aria-hidden="true"></div>
-              </div>
-              <div class="video-caption"><span>原始教学视频</span><strong data-current-chord>--</strong></div>
-              <div class="frame-counter">00:00.000</div>
+        <div class="practice-board">
+          <div class="lesson-column">
+            <div class="mobile-view-switch" role="group" aria-label="切换练习画面">
+              <button class="is-active" type="button" data-action="switch-mobile-view" data-mobile-view="teacher" aria-pressed="true">老师画面</button>
+              <button type="button" data-action="switch-mobile-view" data-mobile-view="left" aria-pressed="false">左手特写</button>
+              <button type="button" data-action="switch-mobile-view" data-mobile-view="right" aria-pressed="false">右手特写</button>
             </div>
-            <div class="video-controls">
-              <button type="button" data-action="frame-back" aria-label="后退一帧">│◁</button>
-              <button class="main-play" type="button" data-action="toggle-play" aria-label="播放" aria-pressed="false"><span data-play-icon>▶</span></button>
-              <button type="button" data-action="frame-forward" aria-label="前进一帧">▷│</button>
-              <span class="current-time" data-player-time>00:00</span>
-              <div class="seek-track" data-seek-track role="slider" tabindex="0" aria-label="视频进度" aria-valuemin="0" aria-valuemax="48" aria-valuenow="0"><i data-seek-progress></i><b data-loop-range></b></div>
-              <span data-player-duration>00:48</span>
-              <button type="button" data-action="toggle-loop" aria-label="开启 A B 循环">A—B</button>
-              <button type="button" data-action="fullscreen" aria-label="全屏播放">⛶</button>
-            </div>
-          </section>
 
-          <aside class="hand-stack" aria-label="双手动作特写">
-            <article class="hand-pane left-hand-pane">
-              <header><span>左手特写</span><b data-left-hand-confidence>--</b></header>
-              <div class="fretboard-visual">
-                <div class="fret-strings" aria-hidden="true"></div>
-                <span class="finger-dot finger-one">1</span><span class="finger-dot finger-two">2</span><span class="finger-dot finger-three">3</span>
-                <div class="motion-arrow" data-next-motion>→ <small>等待演奏</small></div>
+            <div class="player-grid">
+              <section class="teacher-pane" id="teacherPane" aria-label="原始教学视频">
+                <div class="teacher-video">
+                  <video id="playerVideo" playsinline hidden></video>
+                  <div class="abstract-video player-fallback" data-video-fallback>
+                    <div class="guitar-neck" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                    <div class="player-silhouette" aria-hidden="true"></div>
+                  </div>
+                  <div class="video-caption"><span>原始教学视频</span><strong data-current-chord>--</strong></div>
+                  <div class="frame-counter">00:00.000</div>
+                </div>
+                <div class="video-controls">
+                  <button type="button" data-action="frame-back" aria-label="后退一帧">│◁</button>
+                  <button class="main-play" type="button" data-action="toggle-play" aria-label="播放" aria-pressed="false"><span data-play-icon>▶</span></button>
+                  <button type="button" data-action="frame-forward" aria-label="前进一帧">▷│</button>
+                  <span class="current-time" data-player-time>00:00</span>
+                  <div class="seek-track" data-seek-track role="slider" tabindex="0" aria-label="视频进度" aria-valuemin="0" aria-valuemax="48" aria-valuenow="0"><i data-seek-progress></i><b data-loop-range></b></div>
+                  <span data-player-duration>00:48</span>
+                  <button type="button" data-action="toggle-loop" aria-label="开启 A B 循环">A—B</button>
+                  <button type="button" data-action="fullscreen" aria-label="全屏播放">⛶</button>
+                </div>
+              </section>
+
+              <aside class="hand-stack" aria-label="双手动作特写">
+                <article class="hand-pane left-hand-pane" id="leftHandPane">
+                  <header><span>左手特写</span><b data-left-hand-confidence>--</b></header>
+                  <div class="fretboard-visual">
+                    <div class="fret-strings" aria-hidden="true"></div>
+                    <span class="finger-dot finger-one">1</span><span class="finger-dot finger-two">2</span><span class="finger-dot finger-three">3</span>
+                    <div class="motion-arrow" data-next-motion>→ <small>等待演奏</small></div>
+                  </div>
+                  <footer data-left-hand-detail><span>等待谱面</span></footer>
+                </article>
+                <article class="hand-pane right-hand-pane" id="rightHandPane">
+                  <header><span>右手特写</span><b data-right-hand-confidence>--</b></header>
+                  <div class="pick-visual"><strong data-pick-direction>↓</strong><div><span data-pick-finger>i · 食指</span><small data-pick-detail>等待演奏</small></div><i></i></div>
+                  <footer><span data-right-hand-detail>跟随视频开始后显示拨弦提示</span></footer>
+                </article>
+              </aside>
+            </div>
+
+            <section class="timeline-pane" aria-label="同步谱面与时间轴">
+              <div class="waveform-row">
+                <span class="track-label">WAVE</span>
+                <div class="workspace-wave" data-waveform></div>
               </div>
-              <footer data-left-hand-detail><span>等待谱面</span></footer>
-            </article>
-            <article class="hand-pane right-hand-pane">
-              <header><span>右手特写</span><b data-right-hand-confidence>--</b></header>
-              <div class="pick-visual"><strong data-pick-direction>↓</strong><div><span data-pick-finger>i · 食指</span><small data-pick-detail>等待演奏</small></div><i></i></div>
-              <footer><span data-right-hand-detail>跟随视频开始后显示拨弦提示</span></footer>
-            </article>
+              <div class="measure-row"><span class="track-label">BAR</span><div data-measures></div></div>
+              <div class="chord-row"><span class="track-label">CHORD</span><div data-chords></div></div>
+              <div class="tablature-row">
+                <span class="track-label">TAB</span>
+                <div class="tablature" data-tablature>
+                  <div class="tab-string"><b>e</b></div><div class="tab-string"><b>B</b></div><div class="tab-string"><b>G</b></div><div class="tab-string"><b>D</b></div><div class="tab-string"><b>A</b></div><div class="tab-string"><b>E</b></div>
+                  <div class="score-playhead" data-score-playhead></div>
+                </div>
+              </div>
+              <div class="timeline-playhead" data-timeline-playhead></div>
+            </section>
+          </div>
+
+          <aside class="feedback-panel feedback-bar" aria-live="polite" aria-label="实时演奏判定">
+            <header class="feedback-heading">
+              <div><small>AI LISTENING</small><strong>实时判定</strong></div>
+              <span><i aria-hidden="true"></i>LIVE</span>
+            </header>
+            <div class="feedback-verdict">
+              <span class="listening-rings" aria-hidden="true"><i></i></span>
+              <div class="listen-state"><small>当前状态</small><strong data-feedback-title>准备就绪</strong></div>
+            </div>
+            <p class="feedback-copy" data-feedback-copy>点击播放，跟随老师开始演奏。</p>
+            <div class="feedback-metrics">
+              <div class="live-score"><small>本轮准确率</small><strong data-live-score>--</strong></div>
+              <div><small>当前小节</small><strong data-feedback-bar>01</strong></div>
+              <div><small>目标动作</small><strong data-feedback-target>等待谱面</strong></div>
+              <div><small>播放速度</small><strong data-feedback-speed>100%</strong></div>
+            </div>
+            <div class="feedback-guidance">
+              <small>跟练提示</small>
+              <p>放松手腕，在拍点前准备下一个指位。轻微误差不会打断演奏。</p>
+            </div>
+            <button class="issue-button" type="button" data-action="open-focus" data-issue-button hidden><span data-issue-copy>检测到难点</span><strong>专项练习 →</strong></button>
           </aside>
         </div>
-
-        <section class="timeline-pane" aria-label="同步谱面与时间轴">
-          <div class="waveform-row">
-            <span class="track-label">WAVE</span>
-            <div class="workspace-wave" data-waveform></div>
-            <div class="timeline-playhead" data-timeline-playhead></div>
-          </div>
-          <div class="measure-row"><span class="track-label">BAR</span><div data-measures></div></div>
-          <div class="chord-row"><span class="track-label">CHORD</span><div data-chords></div></div>
-          <div class="tablature-row">
-            <span class="track-label">TAB</span>
-            <div class="tablature" data-tablature>
-              <div class="tab-string"><b>e</b></div><div class="tab-string"><b>B</b></div><div class="tab-string"><b>G</b></div><div class="tab-string"><b>D</b></div><div class="tab-string"><b>A</b></div><div class="tab-string"><b>E</b></div>
-              <div class="score-playhead" data-score-playhead></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="feedback-bar" aria-live="polite">
-          <div class="listen-state"><span class="listening-rings" aria-hidden="true"><i></i></span><div><small>实时判定</small><strong data-feedback-title>准备就绪</strong></div></div>
-          <p data-feedback-copy>点击播放，跟随老师开始演奏。</p>
-          <div class="live-score"><small>当前小节</small><strong data-live-score>--</strong></div>
-          <button class="issue-button" type="button" data-action="open-focus" data-issue-button hidden><span data-issue-copy>检测到难点</span><strong>专项练习 →</strong></button>
-        </section>
       </section>
     </main>
 

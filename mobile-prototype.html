@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f2efe7">
+  <meta name="description" content="弦间 AI 吉他陪练手机端可点击界面原型。">
+  <title>弦间 · 手机端交互原型</title>
+  <style>
+    :root {
+      --bg: #f2efe7;
+      --surface: #fbfaf6;
+      --surface-2: #e8e4da;
+      --ink: #181a17;
+      --text: #353832;
+      --muted: #74776e;
+      --line: #d5d1c7;
+      --accent: #a4472e;
+      --accent-soft: #efddd5;
+      --sage: #31412f;
+      --success: #2f6b55;
+      --warning: #a16b18;
+      --danger: #a13b32;
+      --display: ui-serif, "Songti SC", STSong, Georgia, serif;
+      --body: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * { box-sizing: border-box; }
+    html { color-scheme: light; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      color: var(--text);
+      background: #d8d4ca;
+      font-family: var(--body);
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; }
+    button { padding: 0; color: inherit; border: 0; background: none; cursor: pointer; }
+    button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    [hidden] { display: none !important; }
+
+    .phone-app {
+      position: relative;
+      width: min(100%, 480px);
+      min-height: 100vh;
+      min-height: 100dvh;
+      margin: 0 auto;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 4% 0, rgba(164, 71, 46, .12), transparent 280px),
+        var(--bg);
+      box-shadow: 0 0 60px rgba(35, 30, 22, .18);
+    }
+
+    .app-header {
+      position: sticky;
+      z-index: 20;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: calc(62px + var(--safe-top));
+      padding: var(--safe-top) 16px 0;
+      border-bottom: 1px solid rgba(213, 209, 199, .82);
+      background: rgba(242, 239, 231, .9);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-mark {
+      position: relative;
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--ink);
+      border-radius: 50%;
+    }
+    .brand-mark::before {
+      content: "";
+      position: absolute;
+      inset: 10px 6px;
+      background: repeating-linear-gradient(to bottom, var(--ink) 0 1px, transparent 1px 4px);
+    }
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      top: 7px;
+      left: 19px;
+      width: 1px;
+      height: 24px;
+      background: var(--accent);
+      transform: rotate(18deg);
+    }
+    .brand-copy { display: grid; }
+    .brand-copy strong { color: var(--ink); font-family: var(--display); font-size: 18px; }
+    .brand-copy small { color: var(--muted); font-size: 9px; letter-spacing: .08em; }
+    .header-actions { display: flex; gap: 8px; }
+    .icon-btn {
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--surface);
+      font-size: 17px;
+    }
+    .mic-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    .mic-dot.on { background: var(--success); box-shadow: 0 0 0 5px rgba(47, 107, 85, .12); }
+
+    .screen {
+      display: none;
+      min-height: calc(100vh - 126px - var(--safe-top) - var(--safe-bottom));
+      padding: 22px 16px calc(88px + var(--safe-bottom));
+    }
+    .screen.active { display: block; animation: enter .22s ease both; }
+    .screen.practice-screen.active {
+      display: flex;
+      flex-direction: column;
+      height: calc(100vh - 68px - var(--safe-bottom));
+      height: calc(100dvh - 68px - var(--safe-bottom));
+      min-height: 0;
+      padding: max(8px, var(--safe-top)) 8px 8px;
+      overflow: hidden;
+    }
+    .phone-app.practice-active .app-header { display: none; }
+    @keyframes enter { from { opacity: 0; transform: translateY(6px); } }
+
+    .eyebrow { color: var(--accent); font-size: 9px; font-weight: 750; letter-spacing: .16em; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { color: var(--ink); font-family: var(--display); font-size: clamp(29px, 8vw, 38px); line-height: 1.15; }
+    h2 { color: var(--ink); font-family: var(--display); font-size: 22px; }
+    .subcopy { margin-top: 10px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+
+    .hero { padding: 12px 2px 22px; }
+    .hero h1 { margin-top: 10px; }
+    .hero em { color: var(--accent); font-style: normal; }
+    .upload-card {
+      display: grid;
+      place-items: center;
+      min-height: 310px;
+      padding: 26px 20px;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: var(--surface);
+      box-shadow: 0 20px 60px rgba(40, 34, 25, .08);
+      text-align: center;
+    }
+    .upload-card.selected { place-items: stretch; min-height: 0; text-align: left; }
+    .string-emblem {
+      position: relative;
+      width: 94px;
+      height: 94px;
+      margin-bottom: 18px;
+      border: 1px solid var(--ink);
+      border-radius: 50%;
+      background: repeating-linear-gradient(to bottom, transparent 0 13px, var(--ink) 13px 14px);
+    }
+    .string-emblem::after {
+      content: "+";
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      color: var(--accent);
+      font-family: var(--display);
+      font-size: 34px;
+    }
+    .upload-card h2 { margin: 8px 0 4px; }
+    .upload-card > div > p { color: var(--muted); font-size: 11px; }
+    .format-row { display: flex; justify-content: center; gap: 8px; margin-top: 18px; color: var(--muted); font-size: 8px; }
+    .format-row i { width: 3px; height: 3px; margin-top: 5px; border-radius: 50%; background: var(--accent); }
+    .primary, .secondary, .ghost {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      padding: 0 16px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .primary { color: #fff; background: var(--accent); }
+    .secondary { color: var(--ink); border: 1px solid var(--line); background: var(--surface); }
+    .ghost { min-height: 40px; color: var(--accent); }
+    .full { width: 100%; }
+    .demo-btn { display: flex; justify-content: space-between; width: 100%; margin-top: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); text-align: left; }
+    .demo-btn span { display: grid; }
+    .demo-btn small { color: var(--muted); font-size: 8px; }
+    .demo-btn strong { margin-top: 2px; color: var(--ink); font-size: 11px; }
+
+    .file-art {
+      position: relative;
+      height: 150px;
+      overflow: hidden;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #3a463d, #18201b);
+    }
+    .file-art::before {
+      content: "";
+      position: absolute;
+      right: -20px;
+      bottom: -48px;
+      width: 160px;
+      height: 160px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-radius: 50%;
+      box-shadow: inset 0 0 0 28px rgba(164,71,46,.32);
+    }
+    .file-art span { position: absolute; left: 14px; bottom: 12px; color: rgba(255,255,255,.72); font-size: 8px; letter-spacing: .12em; }
+    .file-info { padding-top: 18px; }
+    .file-info h2 { margin-top: 5px; font-size: 20px; }
+    .file-info > p { margin-top: 5px; }
+    .quality { display: flex; gap: 6px; margin: 15px 0; }
+    .quality span { flex: 1; padding: 8px 4px; color: var(--success); border: 1px solid var(--line); border-radius: 8px; font-size: 8px; text-align: center; }
+    .quality span::before { content: "✓ "; }
+
+    .analysis-head { display: flex; align-items: end; justify-content: space-between; margin-bottom: 18px; }
+    .analysis-head h1 { margin-top: 7px; font-size: 28px; }
+    .percent { color: var(--accent); font-family: var(--display); font-size: 42px; line-height: 1; }
+    .analysis-preview { position: relative; height: 190px; overflow: hidden; border-radius: 18px; background: linear-gradient(145deg, #354139, #172019); }
+    .analysis-preview::before {
+      content: "";
+      position: absolute;
+      top: 30px;
+      right: -30px;
+      width: 250px;
+      height: 54px;
+      border: 2px solid rgba(255,255,255,.45);
+      background: repeating-linear-gradient(to bottom, transparent 0 8px, rgba(255,255,255,.28) 8px 9px);
+      transform: rotate(-16deg);
+    }
+    .scan-box { position: absolute; right: 22px; bottom: 24px; width: 120px; height: 76px; border: 1px solid var(--accent); }
+    .scan-box span { position: absolute; top: -18px; left: 0; color: #efc7b8; font-size: 8px; }
+    .wave { display: flex; align-items: center; gap: 2px; height: 48px; margin-top: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+    .wave i { flex: 1; height: var(--h); border-radius: 3px; background: var(--accent); opacity: .72; }
+    .steps { margin-top: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+    .step { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 10px; min-height: 49px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+    .step:last-child { border-bottom: 0; }
+    .step i { display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid var(--line); border-radius: 50%; color: #fff; font-size: 9px; }
+    .step.done i { border-color: var(--success); background: var(--success); }
+    .step.current i { border-color: var(--accent); background: var(--accent); }
+    .step div { display: grid; }
+    .step strong { color: var(--ink); font-size: 10px; }
+    .step span, .step b { color: var(--muted); font-size: 8px; font-weight: 500; }
+    .analysis-actions { display: grid; gap: 8px; margin-top: 14px; }
+
+    .practice-top { display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; min-height: 42px; }
+    .practice-title { min-width: 0; }
+    .practice-title small { color: var(--muted); font-size: 8px; }
+    .practice-title strong { display: block; overflow: hidden; color: var(--ink); font-family: var(--display); font-size: 17px; text-overflow: ellipsis; white-space: nowrap; }
+    .practice-actions { display: flex; gap: 6px; }
+    .mini-btn { display: grid; place-items: center; min-width: 36px; height: 36px; padding: 0 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); font-size: 9px; }
+    .mini-btn.active { color: #fff; border-color: var(--success); background: var(--success); }
+    .speed-row { display: flex; flex: 0 0 auto; gap: 3px; margin: 6px 0; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+    .speed-row button { flex: 1; min-height: 32px; border-radius: 6px; color: var(--muted); font-size: 8px; }
+    .speed-row button.active { color: #fff; background: var(--ink); }
+    .view-tabs { display: flex; flex: 0 0 auto; gap: 3px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+    .view-tabs button { flex: 1; min-height: 33px; border-radius: 6px; color: var(--muted); font-size: 9px; }
+    .view-tabs button.active { color: #fff; background: var(--ink); }
+
+    .media-card { flex: 1 1 auto; min-height: 170px; margin-top: 6px; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+    .media-view { position: relative; display: none; height: calc(100% - 43px); min-height: 130px; overflow: hidden; background: linear-gradient(145deg, #354139, #172019); }
+    .media-view.active { display: block; }
+    .teacher-visual::before { content: ""; position: absolute; right: -30px; bottom: -80px; width: 230px; height: 230px; border: 2px solid rgba(255,255,255,.25); border-radius: 50%; box-shadow: inset 0 0 0 42px rgba(122,72,42,.32); }
+    .teacher-visual::after { content: ""; position: absolute; top: 28px; right: -20px; width: 270px; height: 55px; border: 2px solid rgba(255,255,255,.4); background: repeating-linear-gradient(to bottom, transparent 0 8px, rgba(255,255,255,.3) 8px 9px); transform: rotate(-16deg); }
+    .media-label { position: absolute; z-index: 2; right: 12px; bottom: 12px; display: flex; gap: 12px; color: rgba(255,255,255,.7); font-size: 8px; }
+    .media-label strong { color: #fff; font-family: var(--display); font-size: 25px; }
+    .fretboard { position: absolute; inset: 24px 18px; border-right: 2px solid rgba(255,255,255,.55); border-left: 2px solid rgba(255,255,255,.55); background: repeating-linear-gradient(to bottom, transparent 0 18px, rgba(255,255,255,.35) 18px 19px), repeating-linear-gradient(to right, transparent 0 19%, rgba(255,255,255,.28) 19% 20%); }
+    .finger { position: absolute; z-index: 2; display: grid; place-items: center; width: 28px; height: 28px; color: #fff; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 5px rgba(164,71,46,.23); font-size: 9px; }
+    .finger.one { top: 30%; left: 25%; } .finger.two { top: 52%; left: 48%; } .finger.three { top: 67%; left: 69%; }
+    .pick-view { display: none; align-items: center; justify-content: center; gap: 24px; color: #fff; background: repeating-linear-gradient(to bottom, #253129 0 20px, #344039 20px 21px); }
+    .pick-view.active { display: flex; }
+    .pick-view > strong { color: #d78965; font-size: 76px; font-weight: 300; }
+    .pick-view div { display: grid; }
+    .pick-view span { font-family: var(--display); font-size: 22px; }
+    .pick-view small { color: rgba(255,255,255,.64); font-size: 9px; }
+    .media-controls { display: flex; align-items: center; gap: 7px; height: 43px; padding: 0 9px; color: var(--muted); font-size: 8px; }
+    .play-btn { display: grid; place-items: center; width: 34px; height: 34px; color: #fff; border-radius: 50%; background: var(--accent); }
+    .seek { position: relative; flex: 1; height: 4px; background: var(--line); }
+    .seek i { position: absolute; inset: 0 auto 0 0; width: var(--progress, 0%); background: var(--accent); }
+
+    .score-card { flex: 0 0 auto; margin-top: 6px; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+    .score-row { display: grid; grid-template-columns: 34px 1fr; border-bottom: 1px solid var(--line); }
+    .score-row:last-child { border-bottom: 0; }
+    .track-label { display: grid; place-items: center; color: var(--muted); border-right: 1px solid var(--line); font-size: 6px; }
+    .bars, .chords { display: grid; grid-template-columns: repeat(4, 1fr); }
+    .bars button, .chords button { min-height: 25px; border-right: 1px solid var(--line); color: var(--muted); font-size: 8px; }
+    .chords button { min-height: 31px; color: var(--ink); font-family: var(--display); font-size: 13px; }
+    .bars button.active, .chords button.active { color: #fff; background: var(--ink); }
+    .tab { position: relative; height: 101px; overflow: hidden; }
+    .string { position: absolute; right: 5px; left: 5px; top: calc(11px + var(--row) * 15px); height: 1px; background: #bcb7ac; }
+    .string b { position: absolute; top: -6px; left: 0; padding-right: 3px; color: var(--muted); background: var(--surface); font-size: 7px; font-weight: 500; }
+    .note { position: absolute; z-index: 2; top: calc(11px + (var(--string) - 1) * 15px); left: var(--x); display: grid; place-items: center; width: 19px; height: 19px; border: 1px solid #aaa69d; border-radius: 50%; background: var(--surface); font-size: 8px; transform: translate(-50%, -50%); }
+    .note.active { color: #fff; border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+
+    .feedback-compact { display: grid; grid-template-columns: 1fr auto; gap: 5px 10px; flex: 0 0 auto; margin-top: 6px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+    .feedback-state { display: flex; align-items: center; gap: 9px; }
+    .listening { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 50%; }
+    .listening i { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+    .feedback-state div { display: grid; }
+    .feedback-state small, .score-live small { color: var(--muted); font-size: 7px; }
+    .feedback-state strong { color: var(--ink); font-family: var(--display); font-size: 17px; }
+    .score-live { display: grid; text-align: right; }
+    .score-live strong { color: var(--accent); font-family: var(--display); font-size: 25px; line-height: 1; }
+    .feedback-copy { grid-column: 1 / -1; overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+    .focus-entry { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; min-height: 38px; padding: 0 12px; color: #fff; border-radius: 8px; background: var(--sage); font-size: 9px; }
+
+    .focus-screen { padding-top: max(12px, var(--safe-top)); }
+    .back-btn { display: inline-flex; align-items: center; min-height: 40px; color: var(--accent); font-size: 10px; }
+    .focus-head { padding: 8px 0 18px; }
+    .focus-head h1 { margin-top: 7px; }
+    .review-card { overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+    .review-visual { position: relative; height: 240px; overflow: hidden; background: linear-gradient(145deg, #354139, #172019); }
+    .review-visual .fretboard { inset: 28px 30px; }
+    .review-caption { position: absolute; right: 12px; bottom: 12px; left: 12px; padding: 11px; color: #fff; border-radius: 10px; background: rgba(20,24,20,.7); }
+    .review-caption small { display: block; color: rgba(255,255,255,.65); font-size: 8px; }
+    .review-caption strong { font-family: var(--display); font-size: 17px; }
+    .review-controls { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; padding: 8px; }
+    .review-controls button { min-height: 38px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); font-size: 8px; }
+    .coach-card { margin-top: 10px; padding: 18px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+    .coach-card h2 { margin-top: 4px; }
+    .coach-tip { margin-top: 14px; padding: 12px; border-left: 2px solid var(--accent); background: var(--accent-soft); font-size: 10px; line-height: 1.6; }
+    .speed-ladder { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin: 15px 0; }
+    .speed-ladder button { min-height: 54px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); font-size: 9px; }
+    .speed-ladder button.active { color: #fff; border-color: var(--accent); background: var(--accent); }
+    .round { display: flex; justify-content: space-between; margin-bottom: 12px; color: var(--muted); font-size: 9px; }
+    .comparison { margin-top: 10px; padding: 16px; border-radius: 16px; color: #fff; background: var(--sage); }
+    .comparison h3 { font-family: var(--display); font-size: 20px; }
+    .compare-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 12px; }
+    .compare-grid span { display: grid; padding: 9px; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; }
+    .compare-grid small { color: rgba(255,255,255,.62); font-size: 7px; }
+    .compare-grid strong { margin-top: 3px; font-size: 13px; }
+
+    .result-hero { padding: 6px 0 20px; text-align: center; }
+    .result-hero h1 { margin-top: 8px; font-size: 30px; }
+    .score-ring { display: grid; place-items: center; width: 150px; height: 150px; margin: 18px auto 0; border: 12px solid var(--accent-soft); border-top-color: var(--accent); border-right-color: var(--accent); border-radius: 50%; transform: rotate(16deg); }
+    .score-ring div { display: grid; transform: rotate(-16deg); }
+    .score-ring strong { color: var(--ink); font-family: var(--display); font-size: 52px; line-height: 1; }
+    .score-ring small { color: var(--muted); font-size: 8px; }
+    .metric-list { display: grid; gap: 8px; }
+    .metric { padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+    .metric > div { display: flex; justify-content: space-between; }
+    .metric strong { color: var(--ink); font-size: 11px; }
+    .metric b { color: var(--accent); font-family: var(--display); font-size: 22px; }
+    .meter { height: 4px; margin-top: 10px; background: var(--line); }
+    .meter i { display: block; width: var(--value); height: 100%; background: var(--success); }
+    .mastery { margin-top: 18px; }
+    .mastery h2 { font-size: 19px; }
+    .mastery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin-top: 10px; }
+    .mastery-grid article { padding: 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+    .mastery-grid span { color: var(--muted); font-size: 8px; }
+    .mastery-grid strong { display: block; margin-top: 3px; color: var(--success); font-size: 10px; }
+    .result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+
+    .bottom-nav {
+      position: fixed;
+      z-index: 30;
+      right: max(0px, calc((100vw - 480px) / 2));
+      bottom: 0;
+      left: max(0px, calc((100vw - 480px) / 2));
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      min-height: calc(68px + var(--safe-bottom));
+      padding: 6px 8px var(--safe-bottom);
+      border-top: 1px solid var(--line);
+      background: rgba(251,250,246,.94);
+      backdrop-filter: blur(18px);
+    }
+    .bottom-nav button { display: grid; place-items: center; align-content: center; gap: 3px; color: var(--muted); font-size: 8px; }
+    .bottom-nav button i { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; font-style: normal; font-size: 14px; }
+    .bottom-nav button.active { color: var(--accent); font-weight: 700; }
+    .bottom-nav button.active i { background: var(--accent-soft); }
+
+    .layer { position: fixed; z-index: 60; inset: 0; display: grid; align-items: end; background: rgba(17,20,16,.4); }
+    .sheet { width: min(100%, 480px); max-height: 85vh; margin: 0 auto; padding: 22px 18px calc(22px + var(--safe-bottom)); overflow-y: auto; border-radius: 24px 24px 0 0; background: var(--surface); animation: sheet .22s ease both; }
+    @keyframes sheet { from { transform: translateY(20px); opacity: 0; } }
+    .sheet-head { display: flex; align-items: center; justify-content: space-between; }
+    .sheet-head h2 { font-size: 24px; }
+    .setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 0; border-bottom: 1px solid var(--line); }
+    .setting div { display: grid; }
+    .setting strong { color: var(--ink); font-size: 11px; }
+    .setting span { color: var(--muted); font-size: 8px; }
+    .switch { position: relative; width: 46px; height: 28px; border-radius: 99px; background: #aaa79e; }
+    .switch::after { content: ""; position: absolute; top: 4px; left: 4px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .18s ease; }
+    .switch.on { background: var(--success); }
+    .switch.on::after { transform: translateX(18px); }
+    .mic-art { display: grid; place-items: center; width: 76px; height: 76px; margin: 8px auto 18px; border: 1px solid var(--line); border-radius: 50%; color: var(--accent); font-size: 28px; }
+    .sheet-copy { margin: 8px 0 18px; color: var(--muted); font-size: 11px; line-height: 1.65; text-align: center; }
+    .countdown { position: fixed; z-index: 90; inset: 0; display: grid; place-items: center; color: #fff; background: rgba(24,26,23,.85); font-family: var(--display); font-size: 96px; }
+    .rotate-hint { position: fixed; z-index: 100; inset: 0; display: none; place-items: center; padding: 28px; color: #fff; background: rgba(24,26,23,.94); text-align: center; }
+    .rotate-hint div { display: grid; justify-items: center; max-width: 280px; }
+    .phone-shape { position: relative; width: 58px; height: 96px; margin-bottom: 24px; border: 2px solid #fff; border-radius: 12px; animation: turnPhone 1.5s ease-in-out infinite; }
+    .phone-shape::after { content: ""; position: absolute; bottom: 6px; left: 50%; width: 14px; height: 2px; border-radius: 2px; background: #fff; transform: translateX(-50%); }
+    .rotate-hint h2 { color: #fff; font-size: 25px; }
+    .rotate-hint p { margin: 9px 0 18px; color: rgba(255,255,255,.66); font-size: 11px; line-height: 1.6; }
+    .rotate-hint .ghost { color: rgba(255,255,255,.78); }
+    @keyframes turnPhone { 55%, 100% { transform: rotate(90deg); } }
+
+    @media (orientation: portrait) {
+      .phone-app.needs-landscape .rotate-hint { display: grid; }
+    }
+
+    @media (orientation: landscape) and (max-height: 600px) {
+      body { padding: 0; }
+      .phone-app { width: 100vw; max-width: none; min-height: 100dvh; border-radius: 0; }
+      .screen.practice-screen.active {
+        display: grid;
+        grid-template-columns: minmax(280px, 1.25fr) minmax(210px, .85fr) minmax(160px, .65fr);
+        grid-template-rows: auto auto minmax(0, 1fr);
+        gap: 5px;
+        height: calc(100dvh - 52px - var(--safe-bottom));
+        padding: max(5px, var(--safe-top)) max(6px, env(safe-area-inset-right, 0px)) 5px max(6px, env(safe-area-inset-left, 0px));
+      }
+      .practice-top { grid-column: 1; grid-row: 1; min-height: 35px; }
+      .practice-title small { display: none; }
+      .practice-title strong { font-size: 15px; }
+      .practice-actions .mini-btn { height: 32px; }
+      .speed-row { grid-column: 2 / 4; grid-row: 1; margin: 0; }
+      .speed-row button { min-height: 30px; }
+      .view-tabs { grid-column: 1; grid-row: 2; }
+      .view-tabs button { min-height: 29px; }
+      .media-card { grid-column: 1; grid-row: 3; min-height: 0; margin-top: 0; }
+      .score-card { grid-column: 2; grid-row: 2 / 4; min-height: 0; margin-top: 0; }
+      .feedback-compact { grid-column: 3; grid-row: 2 / 4; align-content: start; min-width: 0; margin-top: 0; padding: 8px; }
+      .feedback-state { gap: 6px; }
+      .listening { width: 30px; height: 30px; }
+      .feedback-state strong { font-size: 14px; }
+      .score-live { grid-column: 1 / -1; text-align: left; }
+      .feedback-copy { white-space: normal; line-height: 1.4; }
+      .focus-entry { display: grid; gap: 3px; min-height: 48px; padding: 8px; }
+      .focus-entry span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .media-view { min-height: 0; }
+      .bottom-nav { right: 0; bottom: 0; left: 0; min-height: calc(52px + var(--safe-bottom)); padding-top: 2px; border-radius: 0; }
+      .bottom-nav button { grid-auto-flow: column; gap: 5px; }
+      .bottom-nav button i { width: 24px; height: 24px; }
+    }
+
+    [data-theme="dark"] { --bg:#11130f; --surface:#1a1d18; --surface-2:#22261f; --ink:#f3f0e8; --text:#e9e6de; --muted:#a7aaa0; --line:#353930; --accent:#e17a52; --accent-soft:#462d24; --sage:#293728; }
+
+    @media (min-width: 700px) {
+      body { padding: 24px; }
+      .phone-app { min-height: calc(100vh - 48px); border-radius: 32px; }
+      .bottom-nav { right: calc((100vw - 480px) / 2); bottom: 24px; left: calc((100vw - 480px) / 2); border-radius: 0 0 32px 32px; }
+      .screen.practice-screen.active { height: calc(100vh - 116px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="phone-app" id="app">
+    <header class="app-header">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span class="brand-copy"><strong>弦间</strong><small>AI 吉他陪练</small></span></div>
+      <div class="header-actions">
+        <button class="icon-btn" type="button" data-action="mic" aria-label="麦克风"><span class="mic-dot" data-mic-dot></span></button>
+        <button class="icon-btn" type="button" data-action="settings" aria-label="设置">∷</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="screen active" data-screen="upload">
+        <div class="hero"><p class="eyebrow">VIDEO TO PRACTICE</p><h1>一段视频，<br><em>变成你的跟练课。</em></h1><p class="subcopy">AI 识别音符、和弦与左右手动作，并在演奏时给出实时反馈。</p></div>
+        <div class="upload-card" data-upload-card>
+          <div data-empty-upload><button class="string-emblem" type="button" data-action="select-file" aria-label="选择视频"></button><p class="eyebrow">NEW COURSE</p><h2>上传吉他教学视频</h2><p>点击从相册或文件中选择</p><div class="format-row"><span>MP4 / MOV</span><i></i><span>30 秒–10 分钟</span><i></i><span>≤ 1 GB</span></div></div>
+          <div data-selected-upload hidden><div class="file-art"><span>SELECTED VIDEO · 00:48</span></div><div class="file-info"><p class="eyebrow">质量检查通过</p><h2>清晨指弹练习.mp4</h2><p>00:48 · 68.4 MB · 1080p</p><div class="quality"><span>音频清晰</span><span>双手可见</span><span>画面稳定</span></div><button class="primary full" type="button" data-action="start-analysis">开始 AI 解析 →</button><button class="ghost full" type="button" data-action="reset-file">重新选择</button></div></div>
+        </div>
+        <button class="demo-btn" type="button" data-action="select-demo"><span><small>还没有视频？</small><strong>使用 48 秒示例课程</strong></span><b>↗</b></button>
+      </section>
+
+      <section class="screen" data-screen="analysis">
+        <div class="analysis-head"><div><p class="eyebrow">ANALYSING</p><h1>AI 正在听懂<br>这段演奏。</h1></div><strong class="percent" data-percent>0%</strong></div>
+        <div class="analysis-preview"><div class="scan-box"><span>左手与指板定位</span></div></div>
+        <div class="wave" aria-label="音频波形"><i style="--h:30%"></i><i style="--h:74%"></i><i style="--h:48%"></i><i style="--h:88%"></i><i style="--h:55%"></i><i style="--h:92%"></i><i style="--h:40%"></i><i style="--h:72%"></i><i style="--h:34%"></i><i style="--h:82%"></i><i style="--h:56%"></i><i style="--h:94%"></i><i style="--h:43%"></i><i style="--h:68%"></i><i style="--h:35%"></i><i style="--h:78%"></i></div>
+        <div class="steps" data-steps>
+          <div class="step current"><i>1</i><div><strong>安全读取视频</strong><span>正在处理</span></div><b>01</b></div><div class="step"><i>2</i><div><strong>提取分析音轨</strong><span>等待开始</span></div><b>02</b></div><div class="step"><i>3</i><div><strong>识别吉他音高</strong><span>等待开始</span></div><b>03</b></div><div class="step"><i>4</i><div><strong>合并碎音符</strong><span>等待开始</span></div><b>04</b></div><div class="step"><i>5</i><div><strong>求解可演奏弦位</strong><span>等待开始</span></div><b>05</b></div><div class="step"><i>6</i><div><strong>生成六线谱</strong><span>等待开始</span></div><b>06</b></div><div class="step"><i>7</i><div><strong>校验谱面数据</strong><span>等开始</span></div><b>07</b></div><div class="step"><i>8</i><div><strong>准备跟练课程</strong><span>等待开始</span></div><b>08</b></div>
+        </div>
+        <div class="analysis-actions"><button class="primary full" type="button" data-action="enter-practice" hidden>进入弹唱跟练 →</button><button class="ghost full" type="button" data-action="skip-analysis">快速完成演示</button></div>
+      </section>
+
+      <section class="screen practice-screen" data-screen="practice">
+        <div class="practice-top"><div class="practice-title"><small>完整跟练 · 92 BPM · 4/4</small><strong>清晨指弹练习</strong></div><div class="practice-actions"><button class="mini-btn" type="button" data-action="mic" data-mobile-mic>麦克风</button><button class="mini-btn" type="button" data-action="settings">∷</button></div></div>
+        <div class="speed-row" aria-label="播放速度"><button data-speed="50">50%</button><button data-speed="60">60%</button><button data-speed="75">75%</button><button data-speed="90">90%</button><button class="active" data-speed="100">100%</button></div>
+        <div class="view-tabs" role="group" aria-label="切换教学画面"><button class="active" data-view="teacher">老师画面</button><button data-view="left">左手特写</button><button data-view="right">右手特写</button></div>
+        <section class="media-card">
+          <div class="media-view teacher-visual active" data-media="teacher"><div class="media-label"><span>原始教学视频</span><strong data-current-chord>Am</strong></div></div>
+          <div class="media-view" data-media="left"><div class="fretboard"></div><span class="finger one">1</span><span class="finger two">2</span><span class="finger three">3</span><div class="media-label"><span>下一动作</span><strong>2 弦 1 品</strong></div></div>
+          <div class="media-view pick-view" data-media="right"><strong>↑</strong><div><span>i · 食指</span><small>上拨 2 弦</small></div></div>
+          <div class="media-controls"><button class="play-btn" type="button" data-action="play" aria-label="播放"><span data-play-icon>▶</span></button><span data-current-time>00:00</span><button class="seek" type="button" data-action="seek" aria-label="跳转视频进度"><i data-seek-bar></i></button><span>00:48</span><button class="mini-btn" type="button" data-action="loop">A—B</button></div>
+        </section>
+        <section class="score-card" aria-label="和弦与六线谱">
+          <div class="score-row"><span class="track-label">BAR</span><div class="bars"><button class="active" data-jump="0">01</button><button data-jump="12">03</button><button data-jump="24">05</button><button data-jump="36">07</button></div></div>
+          <div class="score-row"><span class="track-label">CHORD</span><div class="chords"><button class="active" data-chord="Am">Am</button><button data-chord="C">C</button><button data-chord="G">G</button><button data-chord="Em">Em</button></div></div>
+          <div class="score-row"><span class="track-label">TAB</span><div class="tab"><span class="string" style="--row:0"><b>e</b></span><span class="string" style="--row:1"><b>B</b></span><span class="string" style="--row:2"><b>G</b></span><span class="string" style="--row:3"><b>D</b></span><span class="string" style="--row:4"><b>A</b></span><span class="string" style="--row:5"><b>E</b></span><button class="note active" style="--string:3;--x:10%" data-note="3 弦 2 品" data-time="4">2</button><button class="note" style="--string:2;--x:22%" data-note="2 弦 1 品" data-time="8">1</button><button class="note" style="--string:1;--x:34%" data-note="1 弦空弦" data-time="12">0</button><button class="note" style="--string:4;--x:49%" data-note="4 弦 2 品" data-time="18">2</button><button class="note" style="--string:2;--x:63%" data-note="2 弦 1 品" data-time="24">1</button><button class="note" style="--string:5;--x:77%" data-note="5 弦 3 品" data-time="31">3</button><button class="note" style="--string:1;--x:91%" data-note="1 弦空弦" data-time="42">0</button></div></div>
+        </section>
+        <section class="feedback-compact"><div class="feedback-state"><span class="listening"><i></i></span><div><small>实时判定</small><strong data-feedback>准备就绪</strong></div></div><div class="score-live"><small>准确率</small><strong data-live-score>--</strong></div><p class="feedback-copy" data-feedback-copy>点击播放，跟随老师开始演奏。</p><button class="focus-entry" type="button" data-go="focus"><span>第 6 小节检测到换把难点</span><strong>专项练习 →</strong></button></section>
+      </section>
+
+      <section class="screen focus-screen" data-screen="focus">
+        <button class="back-btn" type="button" data-go="practice">← 返回完整跟练</button><div class="focus-head"><p class="eyebrow">FOCUS MODE</p><h1>只练这一个动作。</h1><p class="subcopy">第 6 小节 · 回看循环 00:17.420–00:18.920</p></div>
+        <section class="review-card"><div class="review-visual" data-review><div class="fretboard"></div><span class="finger one">1</span><span class="finger three">3</span><div class="review-caption"><small>老师动作 · 60% 速度</small><strong>不要完全抬起食指</strong></div></div><div class="review-controls"><button data-action="frame">│◁ 上一帧</button><button data-action="review-play">▶ 观看</button><button data-action="frame">下一帧 ▷│</button><button data-action="mirror">镜像</button></div></section>
+        <section class="coach-card"><p class="eyebrow">本轮只关注</p><h2>换到 C 和弦时的漏音</h2><p class="coach-tip">保留食指与指板的距离，只移动需要换把的手指。落指后先听高音弦是否清晰。</p><div class="speed-ladder"><button class="active">60%<br>练习中</button><button>75%<br>待解锁</button><button>90%<br>待解锁</button><button>100%<br>原速</button></div><div class="round"><span>第 1 / 4 轮</span><strong>目标：连续正确 2 次</strong></div><button class="primary full" type="button" data-action="try-focus">我来试试 →</button></section>
+        <section class="comparison" data-comparison hidden><h3>这一遍有进步。</h3><p class="subcopy" style="color:rgba(255,255,255,.7)">下一步：保持当前速度再练一次。</p><div class="compare-grid"><span><small>音符正确率</small><strong>72% → 91%</strong></span><span><small>和弦完整度</small><strong>60% → 88%</strong></span><span><small>节奏稳定度</small><strong>68% → 84%</strong></span></div></section>
+      </section>
+
+      <section class="screen" data-screen="results">
+        <div class="result-hero"><p class="eyebrow">SESSION COMPLETE</p><h1>今天的手，<br>比昨天更懂这首曲。</h1><div class="score-ring"><div><strong>88</strong><small>总体得分</small></div></div><p class="subcopy">本次练习 12 分 36 秒 · 比首次提升 16 分</p></div>
+        <div class="metric-list"><article class="metric"><div><strong>音符正确率</strong><b>91%</b></div><div class="meter"><i style="--value:91%"></i></div></article><article class="metric"><div><strong>和弦完整度</strong><b>88%</b></div><div class="meter"><i style="--value:88%"></i></div></article><article class="metric"><div><strong>节奏稳定度</strong><b>84%</b></div><div class="meter"><i style="--value:84%"></i></div></article></div>
+        <section class="mastery"><h2>片段掌握地图</h2><div class="mastery-grid"><article><span>第 01–02 小节</span><strong>已掌握</strong></article><article><span>第 03–04 小节</span><strong>已掌握</strong></article><article><span>第 05–06 小节</span><strong style="color:var(--warning)">基本掌握</strong></article><article><span>第 07–08 小节</span><strong>已掌握</strong></article></div></section>
+        <div class="result-actions"><button class="secondary" type="button" data-go="focus">复习薄弱小节</button><button class="primary" type="button" data-go="practice">再弹一次</button><button class="ghost" type="button" data-go="upload">返回课程</button><button class="ghost" type="button" data-go="practice">继续下一片段</button></div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="原型页面导航"><button class="active" data-go="upload"><i>⊕</i><span>上传</span></button><button data-go="practice"><i>▷</i><span>跟练</span></button><button data-go="focus"><i>◎</i><span>纠错</span></button><button data-go="results"><i>◌</i><span>结果</span></button></nav>
+
+    <div class="layer" data-settings-layer hidden><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle"><div class="sheet-head"><div><p class="eyebrow">PREFERENCES</p><h2 id="settingsTitle">跟练设置</h2></div><button class="icon-btn" type="button" data-action="close-layer">×</button></div><div class="setting"><div><strong>教学友好容错</strong><span>忽略轻微环境噪声与共振</span></div><button class="switch on" type="button" data-action="toggle"></button></div><div class="setting"><div><strong>连续错误自动降速</strong><span>同一位置错误两次后降速</span></div><button class="switch on" type="button" data-action="toggle"></button></div><div class="setting"><div><strong>显示 AI 手指标记</strong><span>在左右手特写中显示动作点</span></div><button class="switch on" type="button" data-action="toggle"></button></div><div class="setting"><div><strong>深色模式</strong><span>适合夜间练习</span></div><button class="switch" type="button" data-action="theme"></button></div></section></div>
+    <div class="layer" data-mic-layer hidden><section class="sheet" role="dialog" aria-modal="true" aria-labelledby="micTitle"><div class="mic-art">⌕</div><p class="eyebrow" style="text-align:center">LIVE LISTENING</p><h2 id="micTitle" style="text-align:center">需要使用麦克风<br>聆听你的吉他。</h2><p class="sheet-copy">录音仅用于当下的实时分析，不会保存原始音频。</p><button class="primary full" type="button" data-action="allow-mic">允许麦克风 →</button><button class="ghost full" type="button" data-action="close-layer">暂不开启，仅观看课程</button></section></div>
+    <div class="countdown" data-countdown hidden>3</div>
+    <div class="rotate-hint" aria-live="polite"><div><span class="phone-shape" aria-hidden="true"></span><h2>正在切换横屏跟练</h2><p>如果浏览器没有自动旋转，请将手机横过来。旋转后会自动进入沉浸式跟练。</p><button class="ghost" type="button" data-action="continue-portrait">继续使用竖屏</button></div></div>
+  </div>
+
+  <script>
+    const app = document.querySelector('#app');
+    const screens = [...document.querySelectorAll('[data-screen]')];
+    const navButtons = [...document.querySelectorAll('.bottom-nav [data-go]')];
+    let analysisTimer = null;
+    let playTimer = null;
+    let playerTime = 0;
+    let micOn = false;
+
+    function showScreen(name) {
+      if (name !== 'practice') releaseLandscapeMode();
+      screens.forEach((screen) => screen.classList.toggle('active', screen.dataset.screen === name));
+      navButtons.forEach((button) => button.classList.toggle('active', button.dataset.go === name));
+      app.classList.toggle('practice-active', name === 'practice');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function releaseLandscapeMode() {
+      app.classList.remove('needs-landscape');
+      try { screen.orientation?.unlock?.(); } catch { /* 部分浏览器不支持方向解锁 */ }
+      if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    }
+
+    async function openPractice() {
+      showScreen('practice');
+      if (window.matchMedia('(orientation: landscape)').matches) {
+        app.classList.remove('needs-landscape');
+        return;
+      }
+      try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+        }
+        if (screen.orientation?.lock) await screen.orientation.lock('landscape');
+      } catch {
+        app.classList.add('needs-landscape');
+      }
+      if (window.matchMedia('(orientation: portrait)').matches) app.classList.add('needs-landscape');
+    }
+
+    function selectFile() {
+      document.querySelector('[data-empty-upload]').hidden = true;
+      document.querySelector('[data-selected-upload]').hidden = false;
+      document.querySelector('[data-upload-card]').classList.add('selected');
+    }
+
+    function resetFile() {
+      document.querySelector('[data-empty-upload]').hidden = false;
+      document.querySelector('[data-selected-upload]').hidden = true;
+      document.querySelector('[data-upload-card]').classList.remove('selected');
+    }
+
+    function finishAnalysis() {
+      clearInterval(analysisTimer);
+      const steps = [...document.querySelectorAll('.step')];
+      steps.forEach((step) => { step.className = 'step done'; step.querySelector('i').textContent = '✓'; step.querySelector('span').textContent = '已完成'; });
+      document.querySelector('[data-percent]').textContent = '100%';
+      document.querySelector('[data-action="enter-practice"]').hidden = false;
+    }
+
+    function startAnalysis() {
+      showScreen('analysis');
+      let index = 0;
+      const steps = [...document.querySelectorAll('.step')];
+      clearInterval(analysisTimer);
+      analysisTimer = setInterval(() => {
+        steps.forEach((step, stepIndex) => {
+          step.className = stepIndex < index ? 'step done' : (stepIndex === index ? 'step current' : 'step');
+          step.querySelector('i').textContent = stepIndex < index ? '✓' : String(stepIndex + 1);
+          step.querySelector('span').textContent = stepIndex < index ? '已完成' : (stepIndex === index ? '正在处理' : '等待开始');
+        });
+        document.querySelector('[data-percent]').textContent = `${Math.min(100, Math.round(index / steps.length * 100))}%`;
+        index += 1;
+        if (index > steps.length) finishAnalysis();
+      }, 420);
+    }
+
+    function updatePlayer() {
+      document.querySelector('[data-current-time]').textContent = `00:${String(Math.floor(playerTime)).padStart(2, '0')}`;
+      document.querySelector('[data-seek-bar]').style.setProperty('--progress', `${playerTime / 48 * 100}%`);
+    }
+
+    function togglePlay() {
+      const icon = document.querySelector('[data-play-icon]');
+      if (playTimer) {
+        clearInterval(playTimer); playTimer = null; icon.textContent = '▶';
+        document.querySelector('[data-feedback]').textContent = '已暂停';
+        return;
+      }
+      icon.textContent = 'Ⅱ';
+      document.querySelector('[data-feedback]').textContent = micOn ? '正在聆听' : '跟随播放';
+      document.querySelector('[data-live-score]').textContent = micOn ? '91%' : '--';
+      document.querySelector('[data-feedback-copy]').textContent = micOn ? '当前音符正确，继续保持节奏。' : '开启麦克风后可获得实时判定。';
+      playTimer = setInterval(() => { playerTime = (playerTime + .25) % 48; updatePlayer(); }, 250);
+    }
+
+    function setMic(on) {
+      micOn = on;
+      document.querySelectorAll('[data-mic-dot]').forEach((dot) => dot.classList.toggle('on', on));
+      document.querySelectorAll('[data-mobile-mic]').forEach((button) => { button.classList.toggle('active', on); button.textContent = on ? '麦克风已连接' : '麦克风'; });
+      document.querySelector('[data-mic-layer]').hidden = true;
+    }
+
+    document.addEventListener('click', (event) => {
+      const go = event.target.closest('[data-go]');
+      if (go) { if (go.dataset.go === 'practice') openPractice(); else showScreen(go.dataset.go); return; }
+
+      const view = event.target.closest('[data-view]');
+      if (view) {
+        document.querySelectorAll('[data-view]').forEach((button) => button.classList.toggle('active', button === view));
+        document.querySelectorAll('[data-media]').forEach((media) => media.classList.toggle('active', media.dataset.media === view.dataset.view));
+        return;
+      }
+
+      const speed = event.target.closest('[data-speed]');
+      if (speed) { document.querySelectorAll('[data-speed]').forEach((button) => button.classList.toggle('active', button === speed)); return; }
+
+      const note = event.target.closest('[data-note]');
+      if (note) {
+        document.querySelectorAll('[data-note]').forEach((button) => button.classList.toggle('active', button === note));
+        playerTime = Number(note.dataset.time); updatePlayer();
+        document.querySelector('[data-feedback]').textContent = note.dataset.note;
+        document.querySelector('[data-feedback-copy]').textContent = `已定位到 ${note.dataset.note}，画面与谱面已同步。`;
+        return;
+      }
+
+      const jump = event.target.closest('[data-jump]');
+      if (jump) { playerTime = Number(jump.dataset.jump); updatePlayer(); document.querySelectorAll('[data-jump]').forEach((button) => button.classList.toggle('active', button === jump)); return; }
+      const chord = event.target.closest('[data-chord]');
+      if (chord) { document.querySelector('[data-current-chord]').textContent = chord.dataset.chord; document.querySelectorAll('[data-chord]').forEach((button) => button.classList.toggle('active', button === chord)); return; }
+
+      const action = event.target.closest('[data-action]')?.dataset.action;
+      if (!action) return;
+      if (action === 'select-file' || action === 'select-demo') selectFile();
+      if (action === 'reset-file') resetFile();
+      if (action === 'start-analysis') startAnalysis();
+      if (action === 'skip-analysis') finishAnalysis();
+      if (action === 'enter-practice') openPractice();
+      if (action === 'play') togglePlay();
+      if (action === 'seek') { playerTime = (playerTime + 8) % 48; updatePlayer(); }
+      if (action === 'loop') event.target.closest('button').classList.toggle('active');
+      if (action === 'settings') document.querySelector('[data-settings-layer]').hidden = false;
+      if (action === 'mic') document.querySelector('[data-mic-layer]').hidden = false;
+      if (action === 'allow-mic') setMic(true);
+      if (action === 'close-layer') event.target.closest('.layer').hidden = true;
+      if (action === 'toggle') event.target.closest('button').classList.toggle('on');
+      if (action === 'theme') { const button = event.target.closest('button'); button.classList.toggle('on'); app.dataset.theme = button.classList.contains('on') ? 'dark' : ''; }
+      if (action === 'mirror') { document.querySelector('[data-review]').style.transform = document.querySelector('[data-review]').style.transform ? '' : 'scaleX(-1)'; event.target.closest('button').classList.toggle('active'); }
+      if (action === 'review-play') { event.target.closest('button').textContent = event.target.closest('button').textContent.includes('▶') ? 'Ⅱ 暂停' : '▶ 观看'; }
+      if (action === 'frame') event.target.closest('button').classList.toggle('active');
+      if (action === 'try-focus') {
+        const countdown = document.querySelector('[data-countdown]'); let count = 3; countdown.hidden = false; countdown.textContent = count;
+        const timer = setInterval(() => { count -= 1; countdown.textContent = count || '开始'; if (count < 0) { clearInterval(timer); countdown.hidden = true; document.querySelector('[data-comparison]').hidden = false; } }, 550);
+      }
+      if (action === 'continue-portrait') app.classList.remove('needs-landscape');
+    });
+
+    document.querySelectorAll('.layer').forEach((layer) => layer.addEventListener('click', (event) => { if (event.target === layer) layer.hidden = true; }));
+    window.addEventListener('orientationchange', () => { if (window.matchMedia('(orientation: landscape)').matches) app.classList.remove('needs-landscape'); });
+  </script>
+</body>
+</html>

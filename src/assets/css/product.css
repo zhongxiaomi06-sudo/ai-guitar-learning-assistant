@@ -3241,3 +3241,908 @@ a:focus-visible {
 
   .stage { padding-top: 28px; }
 }
+
+/* ------------------------------------------------------------------
+   Practice workspace V2: one-screen learning desk + mobile modes
+   ------------------------------------------------------------------ */
+
+.workspace-shell {
+  display: flex;
+  flex-direction: column;
+  width: min(1800px, 100%);
+  height: calc(100vh - var(--header-height));
+  height: calc(100dvh - var(--header-height));
+  min-height: 0;
+  padding: 14px clamp(14px, 2vw, 32px) 16px;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.product-shell.is-practice-stage .topbar {
+  display: none;
+}
+
+.product-shell.is-practice-stage .workspace-shell {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.workspace-toolbar {
+  flex: 0 0 auto;
+  min-height: 42px;
+  margin-bottom: 10px;
+}
+
+.practice-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(292px, 23vw, 370px);
+  flex: 1 1 auto;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.lesson-column {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.mobile-view-switch {
+  display: none;
+}
+
+.mobile-view-switch button,
+.speed-control button,
+.video-controls button {
+  touch-action: manipulation;
+}
+
+.practice-board .player-grid {
+  grid-template-columns: minmax(0, 2.35fr) minmax(220px, .65fr);
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.practice-board .teacher-pane {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 50px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.practice-board .teacher-video {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+
+.practice-board .video-controls {
+  min-height: 50px;
+}
+
+.practice-board .hand-stack {
+  min-width: 0;
+  min-height: 0;
+}
+
+.practice-board .fretboard-visual,
+.practice-board .pick-visual {
+  min-height: 0;
+}
+
+.practice-board .timeline-pane {
+  --track-label-width: 50px;
+  min-width: 0;
+  margin-top: 0;
+}
+
+.practice-board .waveform-row,
+.practice-board .measure-row,
+.practice-board .chord-row,
+.practice-board .tablature-row {
+  grid-template-columns: var(--track-label-width) minmax(0, 1fr);
+}
+
+.practice-board .workspace-wave {
+  height: 34px;
+  padding-block: 3px;
+}
+
+.practice-board .measure-row button {
+  min-height: 24px;
+}
+
+.practice-board .chord-row button {
+  min-height: 34px;
+  padding-inline: 10px;
+  font-size: 14px;
+}
+
+.practice-board .tablature {
+  min-width: 0;
+  height: 126px;
+}
+
+.practice-board .tab-string {
+  top: calc(15px + (var(--row, 0) * 18px));
+}
+
+.practice-board .tab-event {
+  top: calc(15px + ((var(--y) - 1) * 18px));
+  width: 22px;
+  height: 22px;
+}
+
+.practice-board .timeline-playhead {
+  left: var(--track-label-width);
+}
+
+.feedback-panel.feedback-bar {
+  position: relative;
+  bottom: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+  min-height: 0;
+  margin-top: 0;
+  padding: clamp(16px, 2.1vw, 28px);
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+
+.feedback-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.feedback-heading > div {
+  display: grid;
+  gap: 2px;
+}
+
+.feedback-heading small,
+.feedback-guidance small {
+  color: var(--color-faint);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: .13em;
+}
+
+.feedback-heading strong {
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+}
+
+.feedback-heading > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  color: var(--color-success);
+  border: 1px solid color-mix(in srgb, var(--color-success) 30%, var(--color-line));
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 7px;
+}
+
+.feedback-heading > span i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.feedback-verdict {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: clamp(18px, 3vh, 30px) 0 12px;
+}
+
+.feedback-verdict .listening-rings {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 48px;
+}
+
+.feedback-verdict .listen-state {
+  display: grid;
+  gap: 2px;
+}
+
+.feedback-verdict .listen-state small {
+  color: var(--color-faint);
+  font-size: 8px;
+}
+
+.feedback-verdict .listen-state strong {
+  font-family: var(--font-display);
+  font-size: clamp(23px, 2vw, 30px);
+  font-weight: 600;
+}
+
+.feedback-copy {
+  min-height: 44px;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.feedback-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 18px;
+  border-top: 1px solid var(--color-line);
+  border-left: 1px solid var(--color-line);
+}
+
+.feedback-metrics > div {
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  min-height: 74px;
+  padding: 12px;
+  border-right: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.feedback-metrics small {
+  color: var(--color-faint);
+  font-size: 8px;
+}
+
+.feedback-metrics strong {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--color-ink);
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feedback-metrics .live-score {
+  min-width: 0;
+  text-align: left;
+}
+
+.feedback-metrics .live-score strong {
+  color: var(--color-accent);
+  font-family: var(--font-display);
+  font-size: 29px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.feedback-guidance {
+  margin-top: clamp(14px, 2.2vh, 22px);
+  padding: 14px;
+  border-left: 2px solid var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent-soft) 42%, transparent);
+}
+
+.feedback-guidance p {
+  margin-top: 7px;
+  color: var(--color-muted);
+  font-size: 10px;
+  line-height: 1.65;
+}
+
+.feedback-panel .issue-button {
+  width: 100%;
+  margin-top: auto;
+}
+
+@media (min-width: 821px) and (max-height: 760px) {
+  .workspace-shell {
+    padding-block: 8px 10px;
+  }
+
+  .workspace-toolbar {
+    min-height: 38px;
+    margin-bottom: 7px;
+  }
+
+  .practice-board,
+  .lesson-column,
+  .practice-board .player-grid,
+  .practice-board .hand-stack {
+    gap: 7px;
+  }
+
+  .practice-board .teacher-pane {
+    grid-template-rows: minmax(0, 1fr) 44px;
+  }
+
+  .practice-board .video-controls {
+    min-height: 44px;
+  }
+
+  .practice-board .waveform-row {
+    display: none;
+  }
+
+  .practice-board .tablature {
+    height: 112px;
+  }
+
+  .feedback-panel.feedback-bar {
+    padding: 14px;
+  }
+
+  .feedback-heading {
+    padding-bottom: 10px;
+  }
+
+  .feedback-verdict {
+    padding: 12px 0 8px;
+  }
+
+  .feedback-copy {
+    min-height: 34px;
+  }
+
+  .feedback-metrics {
+    margin-top: 10px;
+  }
+
+  .feedback-metrics > div {
+    min-height: 58px;
+    padding: 8px 10px;
+  }
+
+  .feedback-guidance {
+    margin-top: 10px;
+    padding: 10px;
+  }
+}
+
+@media (max-width: 1100px) and (min-width: 821px) {
+  .practice-board {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+
+  .practice-board .player-grid {
+    grid-template-columns: minmax(0, 1fr) 210px;
+  }
+
+  .feedback-panel.feedback-bar {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 820px) {
+  :root {
+    --header-height: calc(62px + env(safe-area-inset-top, 0px));
+  }
+
+  body {
+    padding-bottom: 0;
+  }
+
+  .topbar {
+    min-height: var(--header-height);
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .workspace-shell {
+    height: calc(100vh - var(--header-height));
+    height: calc(100dvh - var(--header-height));
+    padding: 8px max(8px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+  }
+
+  .product-shell.is-practice-stage .workspace-shell {
+    height: 100vh;
+    height: 100dvh;
+    padding-top: max(8px, env(safe-area-inset-top, 0px));
+  }
+
+  .workspace-toolbar {
+    display: block;
+    min-height: 0;
+    margin-bottom: 7px;
+  }
+
+  .workspace-title {
+    min-width: 0;
+  }
+
+  .workspace-title h1 {
+    overflow: hidden;
+    font-size: 17px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workspace-stats {
+    display: flex;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .workspace-stats > span:first-child,
+  .workspace-stats > .live-mic {
+    display: none;
+  }
+
+  .workspace-stats .speed-control {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+  }
+
+  .workspace-stats .speed-control button {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 38px;
+    padding-inline: 3px;
+  }
+
+  .workspace-stats > .text-button,
+  .workspace-stats > .compact-button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    min-height: 38px;
+    padding-inline: 9px;
+    font-size: 9px;
+  }
+
+  .practice-board {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 7px;
+  }
+
+  .lesson-column {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 6px;
+  }
+
+  .mobile-view-switch {
+    display: flex;
+    gap: 3px;
+    padding: 3px;
+    border: 1px solid var(--color-line);
+    border-radius: 9px;
+    background: var(--color-surface);
+  }
+
+  .mobile-view-switch button {
+    flex: 1 1 0;
+    min-height: 36px;
+    padding-inline: 6px;
+    color: var(--color-faint);
+    border-radius: 6px;
+    font-size: 10px;
+  }
+
+  .mobile-view-switch button.is-active {
+    color: #fff;
+    background: var(--color-ink);
+  }
+
+  .practice-board .player-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: 0;
+  }
+
+  .workspace-shell[data-mobile-view="teacher"] .hand-stack,
+  .workspace-shell[data-mobile-view="left"] .teacher-pane,
+  .workspace-shell[data-mobile-view="right"] .teacher-pane {
+    display: none;
+  }
+
+  .workspace-shell[data-mobile-view="left"] .hand-stack,
+  .workspace-shell[data-mobile-view="right"] .hand-stack {
+    display: block;
+    height: 100%;
+  }
+
+  .workspace-shell[data-mobile-view="left"] .right-hand-pane,
+  .workspace-shell[data-mobile-view="right"] .left-hand-pane {
+    display: none;
+  }
+
+  .workspace-shell[data-mobile-view="left"] .left-hand-pane,
+  .workspace-shell[data-mobile-view="right"] .right-hand-pane {
+    height: 100%;
+  }
+
+  .practice-board .teacher-pane {
+    grid-template-rows: minmax(0, 1fr) 44px;
+    height: 100%;
+  }
+
+  .practice-board .teacher-video {
+    aspect-ratio: auto;
+  }
+
+  .practice-board .video-controls {
+    gap: 5px;
+    min-height: 44px;
+    padding-inline: 8px;
+  }
+
+  .practice-board .video-controls button {
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .practice-board .video-controls button:not(.main-play):nth-child(1),
+  .practice-board .video-controls button:not(.main-play):nth-child(3) {
+    display: none;
+  }
+
+  .practice-board .hand-pane footer {
+    display: flex;
+  }
+
+  .practice-board .timeline-pane {
+    --track-label-width: 36px;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .practice-board .timeline-pane > * {
+    min-width: 0;
+  }
+
+  .practice-board .waveform-row {
+    display: none;
+  }
+
+  .practice-board .track-label {
+    padding-top: 8px;
+    font-size: 6px;
+  }
+
+  .practice-board .measure-row button {
+    min-height: 22px;
+    padding-inline: 3px;
+    font-size: 7px;
+  }
+
+  .practice-board .chord-row button {
+    min-height: 30px;
+    padding-inline: 7px;
+    font-size: 12px;
+  }
+
+  .practice-board .tablature {
+    min-width: 0;
+    height: 104px;
+  }
+
+  .practice-board .tab-string {
+    top: calc(12px + (var(--row, 0) * 15px));
+  }
+
+  .practice-board .tab-string b {
+    top: -6px;
+    left: 4px;
+    font-size: 7px;
+  }
+
+  .practice-board .tab-event {
+    top: calc(12px + ((var(--y) - 1) * 15px));
+    width: 19px;
+    height: 19px;
+    font-size: 8px;
+  }
+
+  .feedback-panel.feedback-bar {
+    position: relative;
+    bottom: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px 12px;
+    min-height: 72px;
+    padding: 9px 11px;
+    overflow: visible;
+  }
+
+  .feedback-heading,
+  .feedback-guidance {
+    display: none;
+  }
+
+  .feedback-verdict {
+    min-width: 0;
+    padding: 0;
+  }
+
+  .feedback-verdict .listening-rings {
+    width: 36px;
+    height: 36px;
+  }
+
+  .feedback-verdict .listen-state {
+    min-width: 0;
+  }
+
+  .feedback-verdict .listen-state strong {
+    overflow: hidden;
+    font-size: 18px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .feedback-copy {
+    display: block;
+    grid-column: 1 / -1;
+    min-height: 0;
+    overflow: hidden;
+    font-size: 9px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .feedback-metrics {
+    display: block;
+    margin: 0;
+    border: 0;
+  }
+
+  .feedback-metrics > div {
+    display: none;
+  }
+
+  .feedback-metrics .live-score {
+    display: grid;
+    min-width: 68px;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    text-align: right;
+  }
+
+  .feedback-metrics .live-score strong {
+    font-size: 25px;
+  }
+
+  .feedback-panel .issue-button {
+    grid-column: 1 / -1;
+    min-height: 40px;
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .brand-copy small,
+  .status-pill span:not(.status-dot) {
+    display: none;
+  }
+
+  .status-pill {
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .workspace-title small {
+    display: none;
+  }
+
+  .workspace-stats .speed-control button {
+    font-size: 7px;
+  }
+
+  .workspace-stats > .compact-button {
+    display: none;
+  }
+}
+
+@media (max-width: 820px) and (max-height: 700px) {
+  .workspace-title {
+    display: none;
+  }
+
+  .workspace-stats {
+    margin-top: 0;
+  }
+
+  .mobile-view-switch button {
+    min-height: 27px;
+    font-size: 9px;
+  }
+
+  .practice-board .teacher-pane {
+    grid-template-rows: minmax(0, 1fr) 38px;
+  }
+
+  .practice-board .video-controls {
+    min-height: 38px;
+  }
+
+  .practice-board .tablature {
+    height: 94px;
+  }
+
+  .practice-board .tab-string {
+    top: calc(10px + (var(--row, 0) * 14px));
+  }
+
+  .practice-board .tab-event {
+    top: calc(10px + ((var(--y) - 1) * 14px));
+  }
+
+  .feedback-copy {
+    display: none;
+  }
+}
+
+@media (max-width: 1024px) and (max-height: 560px) and (orientation: landscape) {
+  :root {
+    --header-height: calc(48px + env(safe-area-inset-top, 0px));
+  }
+
+  .topbar {
+    min-height: var(--header-height);
+  }
+
+  .brand-mark {
+    width: 34px;
+    height: 34px;
+  }
+
+  .brand-copy small,
+  .topbar-course {
+    display: none;
+  }
+
+  .workspace-shell {
+    padding-block: 5px max(5px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .workspace-toolbar {
+    display: block;
+    margin-bottom: 5px;
+  }
+
+  .workspace-title,
+  .workspace-stats > span:first-child,
+  .workspace-stats > .live-mic {
+    display: none;
+  }
+
+  .workspace-stats {
+    display: flex;
+    gap: 6px;
+    margin-top: 0;
+  }
+
+  .workspace-stats .speed-control {
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  .workspace-stats .speed-control button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .workspace-stats .speed-control button,
+  .workspace-stats > .text-button,
+  .workspace-stats > .compact-button {
+    min-height: 29px;
+  }
+
+  .practice-board {
+    grid-template-columns: minmax(0, 1fr) 190px;
+    grid-template-rows: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .lesson-column {
+    grid-template-columns: minmax(0, 1fr) minmax(230px, .78fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .mobile-view-switch {
+    display: flex;
+    grid-column: 1 / -1;
+    gap: 3px;
+    padding: 2px;
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    background: var(--color-surface);
+  }
+
+  .mobile-view-switch button {
+    flex: 1 1 0;
+    min-height: 25px;
+    color: var(--color-faint);
+    border-radius: 6px;
+    font-size: 8px;
+  }
+
+  .mobile-view-switch button.is-active {
+    color: #fff;
+    background: var(--color-ink);
+  }
+
+  .practice-board .player-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .workspace-shell[data-mobile-view="teacher"] .hand-stack,
+  .workspace-shell[data-mobile-view="left"] .teacher-pane,
+  .workspace-shell[data-mobile-view="right"] .teacher-pane {
+    display: none;
+  }
+
+  .workspace-shell[data-mobile-view="left"] .hand-stack,
+  .workspace-shell[data-mobile-view="right"] .hand-stack {
+    display: block;
+    height: 100%;
+  }
+
+  .workspace-shell[data-mobile-view="left"] .right-hand-pane,
+  .workspace-shell[data-mobile-view="right"] .left-hand-pane {
+    display: none;
+  }
+
+  .workspace-shell[data-mobile-view="left"] .left-hand-pane,
+  .workspace-shell[data-mobile-view="right"] .right-hand-pane {
+    height: 100%;
+  }
+
+  .practice-board .teacher-pane {
+    grid-template-rows: minmax(0, 1fr) 38px;
+    height: 100%;
+  }
+
+  .practice-board .timeline-pane {
+    align-self: stretch;
+  }
+
+  .practice-board .measure-row,
+  .practice-board .chord-row {
+    display: none;
+  }
+
+  .practice-board .tablature {
+    height: 100%;
+    min-height: 96px;
+  }
+
+  .feedback-panel.feedback-bar {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    padding: 10px;
+  }
+
+  .feedback-verdict .listening-rings {
+    width: 34px;
+    height: 34px;
+  }
+
+  .feedback-metrics {
+    margin-top: 10px;
+  }
+
+  .feedback-metrics .live-score {
+    text-align: left;
+  }
+}

@@ -96,6 +96,7 @@ const state = {
   focus: null, // { note, loopStart, loopEnd, ladderIndex, round, attempts, reviewing }
   focusAttempt: null, // { results: [] }
   reviewPlaying: false,
+  mobileView: 'teacher', // teacher | left | right
   // 结果
   lastResults: null,
 };
@@ -228,10 +229,23 @@ function chooseTheme(theme) {
   savePreferences();
 }
 
+function setMobileView(view) {
+  if (!['teacher', 'left', 'right'].includes(view)) return;
+  state.mobileView = view;
+  const workspace = $('[data-workspace]');
+  if (workspace) workspace.dataset.mobileView = view;
+  $$('[data-mobile-view]').forEach((button) => {
+    const selected = button.dataset.mobileView === view;
+    button.classList.toggle('is-active', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
+}
+
 /* ---------------------------------------------------------------- 阶段切换 */
 
 function setStage(stage) {
   state.stage = stage;
+  $('#productShell')?.classList.toggle('is-practice-stage', stage === 'practice');
   $('[data-stage]').hidden = stage === 'practice';
   $('[data-workspace]').hidden = stage !== 'practice';
   $('[data-upload-area]').hidden = stage === 'analyzing';
@@ -1197,6 +1211,7 @@ function enterPractice() {
   state.lastMatchedNoteId = null;
 
   setStage('practice');
+  setMobileView(state.mobileView);
   renderScore();
   renderMeasureTrack();
   renderChordTrack();
@@ -1298,6 +1313,8 @@ function setPlayerSpeed(speed, { silent = false } = {}) {
   const video = $('#playerVideo');
   if (video) video.playbackRate = state.playerSpeed;
   $$('[data-speed]').forEach((button) => button.classList.toggle('is-active', Number(button.dataset.speed) === state.playerSpeed));
+  const feedbackSpeed = $('[data-feedback-speed]');
+  if (feedbackSpeed) feedbackSpeed.textContent = `${Math.round(state.playerSpeed * 100)}%`;
   if (!silent) showToast(`播放速度已调整为 ${Math.round(state.playerSpeed * 100)}%`);
 }
 
@@ -1488,7 +1505,7 @@ function updatePlayerUI() {
   const timeline = $('.timeline-pane');
   const timelinePlayhead = $('[data-timeline-playhead]');
   if (timeline && timelinePlayhead) {
-    const labelWidth = 58;
+    const labelWidth = Number.parseFloat(getComputedStyle(timeline).getPropertyValue('--track-label-width')) || 58;
     const left = labelWidth + Math.max(0, timeline.clientWidth - labelWidth) * progress;
     timelinePlayhead.style.left = `${left}px`;
   }
@@ -1521,6 +1538,8 @@ function updatePlayerUI() {
   });
   $('[data-current-chord]').textContent = currentBar?.chord
     || DEMO_CHORDS[(currentBar?.index ?? 1) - 1] || '--';
+  const feedbackBar = $('[data-feedback-bar]');
+  if (feedbackBar) feedbackBar.textContent = String(currentBar?.index ?? 1).padStart(2, '0');
 
   updateHandPanes(currentBar);
   updateListeningState();
@@ -1553,6 +1572,12 @@ function updateHandPanes(currentBar) {
   }
   const rightDetail = $('[data-right-hand-detail]');
   if (rightDetail && next) rightDetail.textContent = `下一次：拨 ${next.string} 弦`;
+  const feedbackTarget = $('[data-feedback-target]');
+  if (feedbackTarget) {
+    feedbackTarget.textContent = current
+      ? `${current.string} 弦 ${current.fret} 品`
+      : (currentBar?.chord ? `${currentBar.chord} 和弦` : '等待谱面');
+  }
 }
 
 function updateListeningState() {
@@ -1990,8 +2015,13 @@ function handleAction(action, element) {
     case 'toggle-loop':
       toggleLoop();
       break;
+    case 'switch-mobile-view':
+      setMobileView(element.dataset.mobileView);
+      break;
     case 'fullscreen': {
-      const pane = $('.teacher-pane');
+      const pane = state.mobileView === 'left'
+        ? $('.left-hand-pane')
+        : (state.mobileView === 'right' ? $('.right-hand-pane') : $('.teacher-pane'));
       if (!document.fullscreenElement && pane?.requestFullscreen) {
         pane.requestFullscreen().catch(() => showToast('当前浏览器未允许全屏播放。', 'error'));
       } else if (document.fullscreenElement && document.exitFullscreen) {
@@ -2181,6 +2211,7 @@ function bootstrap() {
   initEvents();
   updateCourseCopy();
   updateMicrophoneUI();
+  setMobileView(state.mobileView);
   setVideoSources();
   chooseTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
   setStage('upload');
