@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     storage_local_path: str = "./storage"
     max_video_upload_bytes: int = Field(default=1024 * 1024 * 1024, gt=0)
     max_score_upload_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
+    # Optional Nginx internal location used to offload large local video files.
+    # Example: /_protected_videos/
+    media_accel_redirect_prefix: str = ""
 
     # Comma-separated so it is convenient to configure from Docker/.env.
     # Defaults include common Vite dev/preview ports to keep local frontend
@@ -58,6 +61,16 @@ class Settings(BaseSettings):
             if normalized in {"debug", "dev", "development"}:
                 return True
         return value
+
+    @field_validator("media_accel_redirect_prefix")
+    @classmethod
+    def validate_media_accel_redirect_prefix(cls, value: str) -> str:
+        normalized = str(value or "").strip()
+        if not normalized:
+            return ""
+        if "\r" in normalized or "\n" in normalized or not normalized.startswith("/"):
+            raise ValueError("media_accel_redirect_prefix must be an absolute internal URI path")
+        return normalized.rstrip("/") + "/"
 
 
 @lru_cache

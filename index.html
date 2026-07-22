@@ -258,7 +258,6 @@
             </div>
             <div class="workspace-stats">
               <span><span data-course-bpm>92</span> <small>BPM</small></span>
-              <span class="live-mic"><i></i><span data-mic-label>未开启麦克风</span></span>
               <div class="speed-control" aria-label="播放速度">
                 <button type="button" data-speed="0.5">50%</button>
                 <button type="button" data-speed="0.6">60%</button>
@@ -266,6 +265,9 @@
                 <button type="button" data-speed="0.9">90%</button>
                 <button class="is-active" type="button" data-speed="1">100%</button>
               </div>
+              <button class="workspace-action" type="button" data-voice-pill aria-label="按住进行语音控制" aria-pressed="false"><span class="voice-dot" data-voice-dot aria-hidden="true"></span>语音</button>
+              <button class="workspace-action" type="button" data-action="open-mic"><span class="status-dot" aria-hidden="true"></span><span data-mic-label>麦克风</span></button>
+              <button class="workspace-action" type="button" data-action="open-settings">设置</button>
               <button class="secondary-button compact-button" type="button" data-action="finish-practice">结束练习</button>
             </div>
           </div>
@@ -286,12 +288,19 @@
                 <button class="main-play" type="button" data-action="toggle-play" aria-label="播放" aria-pressed="false"><span data-play-icon>▶</span></button>
                 <button type="button" data-action="frame-forward" aria-label="前进一帧">▷│</button>
                 <span class="current-time" data-player-time>00:00</span>
-                <div class="seek-track" data-seek-track role="slider" tabindex="0" aria-label="视频进度" aria-valuemin="0" aria-valuemax="48" aria-valuenow="0"><i data-seek-progress></i><b data-loop-range></b></div>
+                <div class="seek-track" data-seek-track role="slider" tabindex="0" aria-label="视频进度" aria-valuemin="0" aria-valuemax="48" aria-valuenow="0"><i data-seek-progress></i><b data-loop-range></b><em data-loop-marker="a"></em><em data-loop-marker="b"></em></div>
                 <span data-player-duration>00:48</span>
-                <button type="button" data-action="toggle-loop" aria-label="开启 A B 循环">A—B</button>
+                <div class="ab-loop-controls" aria-label="A-B 循环控制">
+                  <button type="button" data-action="set-loop-a" aria-label="将当前位置设为 A 点">A</button>
+                  <button type="button" data-action="set-loop-b" aria-label="将当前位置设为 B 点">B</button>
+                  <button type="button" data-action="toggle-loop" data-loop-toggle aria-label="开启 A-B 循环">↻</button>
+                  <button type="button" data-action="clear-loop" aria-label="清除 A-B 循环">×</button>
+                </div>
                 <button type="button" data-action="fullscreen" aria-label="全屏播放">⛶</button>
               </div>
             </section>
+
+            <button class="panel-resize-handle" type="button" data-layout-resizer="video" aria-label="拖动调整主视频和手部面板宽度" title="拖动调整面板宽度，双击恢复默认"></button>
 
             <aside class="hand-stack" aria-label="双手动作特写">
               <article class="hand-pane left-hand-pane">
@@ -314,6 +323,8 @@
               </article>
             </aside>
           </div>
+
+          <button class="timeline-resize-handle" type="button" data-layout-resizer="timeline" aria-label="拖动调整谱面高度" title="拖动调整谱面高度，双击恢复默认"></button>
 
           <section class="timeline-pane" aria-label="同步谱面与时间轴">
             <div class="timeline-toolbar">

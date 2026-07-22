@@ -7,7 +7,7 @@ import mimetypes
 import uuid
 from pathlib import Path
 from typing import List, Optional
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse, RedirectResponse
@@ -191,6 +191,16 @@ async def get_video(
         raise HTTPException(status_code=404, detail="Video file not found")
 
     media_type = mimetypes.guess_type(course.video_path)[0]
+    if settings.media_accel_redirect_prefix:
+        internal_uri = f"{settings.media_accel_redirect_prefix}{quote(Path(local_path).name)}"
+        return Response(
+            status_code=status.HTTP_200_OK,
+            media_type=media_type,
+            headers={
+                "X-Accel-Redirect": internal_uri,
+                "Cache-Control": "public, max-age=3600, immutable",
+            },
+        )
     return _storage_response(local_path, media_type=media_type)
 
 

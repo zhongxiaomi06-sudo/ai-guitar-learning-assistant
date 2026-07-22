@@ -1711,13 +1711,19 @@ a:focus-visible {
   overflow: hidden;
 }
 
+body.is-player-view { overflow: hidden; }
+body:has(.panel-resize-handle.is-dragging),
+body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
+.is-player-view .topbar { display: none; }
+.is-player-view .player-view.is-active { height: 100dvh; }
+
 .workspace-shell {
   width: min(1800px, 100%);
   height: 100%;
   margin: 0 auto;
   padding: clamp(8px, 1.5vh, 18px) clamp(10px, 2vw, 34px);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) 8px auto auto;
   gap: clamp(6px, 1vh, 10px);
 }
 
@@ -1762,6 +1768,25 @@ a:focus-visible {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.workspace-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  color: var(--color-muted);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-surface);
+  font-size: 9px;
+}
+
+.workspace-action:hover,
+.workspace-action.is-on {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
 .workspace-stats > span:first-child {
@@ -1820,9 +1845,44 @@ a:focus-visible {
 
 .player-grid {
   display: grid;
-  grid-template-columns: minmax(0, var(--video-panel-size)) minmax(250px, var(--hand-panel-size));
-  gap: 10px;
+  grid-template-columns: minmax(0, var(--video-panel-size)) 8px minmax(250px, var(--hand-panel-size));
+  gap: 0;
   min-height: 0;
+}
+
+.panel-resize-handle,
+.timeline-resize-handle {
+  position: relative;
+  z-index: 10;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  touch-action: none;
+}
+
+.panel-resize-handle { cursor: col-resize; }
+.timeline-resize-handle { width: 100%; cursor: row-resize; }
+
+.panel-resize-handle::after,
+.timeline-resize-handle::after {
+  content: "";
+  position: absolute;
+  border-radius: 999px;
+  background: var(--color-line-dark);
+  opacity: .5;
+  transition: opacity 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.panel-resize-handle::after { top: 12%; bottom: 12%; left: 3px; width: 2px; }
+.timeline-resize-handle::after { top: 3px; right: 38%; left: 38%; height: 2px; }
+
+.panel-resize-handle:hover::after,
+.panel-resize-handle.is-dragging::after,
+.timeline-resize-handle:hover::after,
+.timeline-resize-handle.is-dragging::after {
+  background: var(--color-accent);
+  opacity: 1;
+  transform: scale(1.25);
 }
 
 .teacher-pane,
@@ -1935,8 +1995,55 @@ a:focus-visible {
   transition: opacity 160ms ease;
 }
 
+.seek-track > em {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--color-warning);
+  transform: translate(-50%, -50%);
+}
+
+.seek-track > em::after {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  color: var(--color-warning);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  transform: translateX(-50%);
+}
+
+.seek-track > em[data-loop-marker="a"]::after { content: "A"; }
+.seek-track > em[data-loop-marker="b"]::after { content: "B"; }
+.seek-track.has-loop-range > b { opacity: .36; }
+
 .seek-track.is-looping > b {
   opacity: 1;
+}
+
+.ab-loop-controls {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-line);
+  border-radius: 7px;
+}
+
+.ab-loop-controls button {
+  min-width: 27px;
+  min-height: 28px;
+  padding: 0 6px;
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+}
+
+.ab-loop-controls button.is-active {
+  color: #fff;
+  background: var(--color-accent);
 }
 
 .hand-stack {
@@ -3620,7 +3727,7 @@ a:focus-visible {
   }
 
   .player-grid {
-    grid-template-columns: minmax(0, var(--video-panel-size)) minmax(220px, var(--hand-panel-size));
+    grid-template-columns: minmax(0, var(--video-panel-size)) 8px minmax(220px, var(--hand-panel-size));
   }
 
   .hand-stack {
@@ -3659,7 +3766,7 @@ a:focus-visible {
   }
 
   .player-grid {
-    grid-template-columns: minmax(0, var(--video-panel-size)) minmax(140px, var(--hand-panel-size));
+    grid-template-columns: minmax(0, var(--video-panel-size)) 8px minmax(140px, var(--hand-panel-size));
   }
 
   .topbar {

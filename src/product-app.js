@@ -95,6 +95,8 @@ const state = {
   playerTime: 0,
   playerSpeed: 1,
   loopEnabled: false,
+  loopStart: null,
+  loopEnd: null,
   animationFrame: null,
   lastFrameAt: 0,
   toastTimer: null,
@@ -164,6 +166,7 @@ function navigate(view) {
 
 function activateView(view) {
   state.view = view;
+  document.body.classList.toggle('is-player-view', view === 'player');
   $$('.view').forEach((element) => {
     const active = element.dataset.view === view;
     element.classList.toggle('is-active', active);
@@ -286,8 +289,11 @@ function resetPlaybackState() {
   state.timelineWindowStart = -1;
   state.timelineWindowEnd = -1;
   state.loopEnabled = false;
+  state.loopStart = null;
+  state.loopEnd = null;
   state.lastDetection = null;
   $('[data-seek-track]')?.classList.remove('is-looping');
+  updateLoopUI();
   pausePlayer();
 }
 
@@ -419,6 +425,7 @@ function updateCourseCopy() {
   }
   const seekTrack = $('[data-seek-track]');
   seekTrack?.setAttribute('aria-valuemax', String(Math.max(1, state.duration)));
+  updateLoopUI();
   savePreferences();
 }
 
@@ -426,7 +433,7 @@ function setVideoSources() {
   const mediaSource = state.videoUrl || state.remoteVideoUrl;
   const mappings = [
     ['analysisVideo', '.media-stage', 'analysis', 'metadata'],
-    ['overviewVideo', '.overview-art', 'overview', 'metadata'],
+    ['overviewVideo', '.overview-art', 'overview', 'none'],
     ['playerVideo', '.teacher-video', 'player', 'auto'],
   ];
 
@@ -442,8 +449,9 @@ function setVideoSources() {
         video.src = mediaSource;
         video.load();
       }
-      video.hidden = false;
-      if (fallback) fallback.hidden = true;
+      const deferPreview = id === 'overviewVideo' && video.readyState < 2;
+      video.hidden = deferPreview;
+      if (fallback) fallback.hidden = !deferPreview;
     } else {
       video.pause();
       if (video.hasAttribute('src')) {
@@ -500,14 +508,82 @@ function applyLayoutPreferences({ persist = false } = {}) {
   if (persist) savePreferences();
 }
 
-function updateLayoutPreference(name, value) {
+function updateLayoutPreference(name, value, { persist = true } = {}) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return;
   if (name === 'video') state.layoutVideoShare = numeric;
   else if (name === 'timeline') state.layoutTimelineScale = numeric;
   else if (name === 'hands') state.layoutLeftHandShare = numeric;
   else return;
-  applyLayoutPreferences({ persist: true });
+  applyLayoutPreferences({ persist });
+}
+
+function initPanelResizers() {
+  $$('[data-layout-resizer]').forEach((handle) => {
+    const kind = handle.dataset.layoutResizer;
+    handle.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      const grid = $('.player-grid');
+      if (!grid) return;
+      const startY = event.clientY;
+      const startTimeline = state.layoutTimelineScale;
+      let pendingFrame = null;
+      let latestEvent = event;
+      handle.classList.add('is-dragging');
+      handle.setPointerCapture?.(event.pointerId);
+
+      const applyMove = () => {
+        pendingFrame = null;
+        if (kind === 'video') {
+          const rect = grid.getBoundingClientRect();
+          const share = (latestEvent.clientX - rect.left) / Math.max(1, rect.width) * 100;
+          updateLayoutPreference('video', Math.round(share * 10) / 10, { persist: false });
+        } else {
+          const scale = startTimeline - (latestEvent.clientY - startY) * 0.28;
+          updateLayoutPreference('timeline', Math.round(scale * 10) / 10, { persist: false });
+        }
+      };
+      const move = (moveEvent) => {
+        latestEvent = moveEvent;
+        if (pendingFrame === null) pendingFrame = requestAnimationFrame(applyMove);
+      };
+      const end = () => {
+        if (pendingFrame !== null) {
+          cancelAnimationFrame(pendingFrame);
+          applyMove();
+        }
+        handle.classList.remove('is-dragging');
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', end);
+        handle.removeEventListener('pointercancel', end);
+        savePreferences();
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', end);
+      handle.addEventListener('pointercancel', end);
+    });
+
+    handle.addEventListener('dblclick', () => {
+      updateLayoutPreference(kind === 'video' ? 'video' : 'timeline', kind === 'video' ? 72 : 100);
+      showToast(kind === 'video' ? '主视频宽度已恢复默认。' : '谱面高度已恢复默认。');
+    });
+
+    handle.addEventListener('keydown', (event) => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home'].includes(event.key)) return;
+      event.preventDefault();
+      if (event.key === 'Home') {
+        updateLayoutPreference(kind === 'video' ? 'video' : 'timeline', kind === 'video' ? 72 : 100);
+        return;
+      }
+      if (kind === 'video') {
+        const delta = event.key === 'ArrowRight' || event.key === 'ArrowUp' ? 2 : -2;
+        updateLayoutPreference('video', state.layoutVideoShare + delta);
+      } else {
+        const delta = event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 5 : -5;
+        updateLayoutPreference('timeline', state.layoutTimelineScale + delta);
+      }
+    });
+  });
 }
 
 function normalizeTimeSignature(value) {
@@ -2023,7 +2099,7 @@ function updatePlayerUI() {
 function toggleLoop(force) {
   const enabled = force !== undefined ? force : !state.loopEnabled;
   state.loopEnabled = enabled;
-  $('[data-seek-track]')?.classList.toggle('is-looping', state.loopEnabled);
+  updateLoopUI();
   if (!state.loopEnabled) {
     showToast('循环已关闭');
     return;
@@ -2031,6 +2107,86 @@ function toggleLoop(force) {
   const range = getLoopRange();
   const label = state.focusMode ? '专项循环' : '片段循环';
   showToast(`${label}已开启：${formatTime(range.start, true)}–${formatTime(range.end, true)}`);
+}
+
+function hasCustomLoopRange() {
+  return Number.isFinite(state.loopStart)
+    && Number.isFinite(state.loopEnd)
+    && state.loopEnd - state.loopStart >= 0.25;
+}
+
+function updateLoopUI() {
+  const track = $('[data-seek-track]');
+  const rangeElement = $('[data-loop-range]');
+  const aMarker = $('[data-loop-marker="a"]');
+  const bMarker = $('[data-loop-marker="b"]');
+  const toggle = $('[data-loop-toggle]');
+  const duration = Math.max(0.001, state.duration);
+  const hasA = !state.focusMode && Number.isFinite(state.loopStart);
+  const hasB = !state.focusMode && Number.isFinite(state.loopEnd);
+  const custom = hasCustomLoopRange() && !state.focusMode;
+  const visualRange = custom
+    ? { start: state.loopStart, end: state.loopEnd }
+    : (state.loopEnabled ? getLoopRange() : null);
+  track?.classList.toggle('is-looping', state.loopEnabled);
+  track?.classList.toggle('has-loop-range', Boolean(visualRange));
+  if (aMarker) {
+    aMarker.hidden = !hasA;
+    if (hasA) aMarker.style.left = `${Math.max(0, Math.min(100, state.loopStart / duration * 100))}%`;
+  }
+  if (bMarker) {
+    bMarker.hidden = !hasB;
+    if (hasB) bMarker.style.left = `${Math.max(0, Math.min(100, state.loopEnd / duration * 100))}%`;
+  }
+  if (rangeElement && visualRange) {
+    const left = Math.max(0, Math.min(100, visualRange.start / duration * 100));
+    const right = Math.max(left, Math.min(100, visualRange.end / duration * 100));
+    rangeElement.style.left = `${left}%`;
+    rangeElement.style.width = `${right - left}%`;
+  } else if (rangeElement) {
+    rangeElement.style.removeProperty('left');
+    rangeElement.style.removeProperty('width');
+  }
+  if (toggle) {
+    toggle.classList.toggle('is-active', state.loopEnabled);
+    toggle.setAttribute('aria-pressed', String(state.loopEnabled));
+    toggle.setAttribute('aria-label', state.loopEnabled ? '暂停 A-B 循环' : '开启 A-B 循环');
+    toggle.title = custom
+      ? `A ${formatTime(state.loopStart, true)} · B ${formatTime(state.loopEnd, true)}`
+      : '未设置 A/B 时循环当前练习片段';
+  }
+}
+
+function setLoopPoint(point) {
+  const current = Math.max(0, Math.min(state.duration, state.playerTime));
+  if (point === 'a') {
+    state.loopStart = current;
+    if (Number.isFinite(state.loopEnd) && state.loopEnd <= current + 0.25) state.loopEnd = null;
+    state.loopEnabled = false;
+    updateLoopUI();
+    showToast(`A 点已设为 ${formatTime(current, true)}，请继续播放后设置 B 点。`);
+    return;
+  }
+  if (!Number.isFinite(state.loopStart)) {
+    showToast('请先设置 A 点。', 'error');
+    return;
+  }
+  if (current <= state.loopStart + 0.25) {
+    showToast('B 点必须至少位于 A 点之后 0.25 秒。', 'error');
+    return;
+  }
+  state.loopEnd = current;
+  state.loopEnabled = true;
+  updateLoopUI();
+  showToast(`A-B 循环已开启：${formatTime(state.loopStart, true)}–${formatTime(state.loopEnd, true)}`);
+}
+
+function clearCustomLoop() {
+  state.loopStart = null;
+  state.loopEnd = null;
+  state.loopEnabled = false;
+  updateLoopUI();
+  showToast('A-B 循环点已清除。');
 }
 
 function showVoiceHelp() {
@@ -2043,16 +2199,14 @@ function showVoiceHelp() {
 }
 
 function updateVoiceUI() {
-  const pill = $('[data-voice-pill]');
-  const dot = $('[data-voice-dot]');
-  if (pill) {
+  $$('[data-voice-pill]').forEach((pill) => {
     pill.classList.toggle('is-on', state.voiceEnabled);
     pill.setAttribute('aria-pressed', String(state.voiceEnabled));
-  }
-  if (dot) {
+  });
+  $$('[data-voice-dot]').forEach((dot) => {
     dot.classList.toggle('is-recording', state.voiceRecording);
     dot.classList.toggle('is-processing', state.voiceProcessing);
-  }
+  });
   const switchButton = $('[data-action="toggle-voice"]');
   if (switchButton) {
     switchButton.classList.toggle('is-on', state.voiceEnabled);
@@ -2191,6 +2345,9 @@ function metricsFromStats(stats) {
 function getLoopRange() {
   if (state.focusMode) {
     return { start: state.focusLoopStart, end: state.focusLoopEnd };
+  }
+  if (hasCustomLoopRange()) {
+    return { start: state.loopStart, end: state.loopEnd };
   }
   const seg = state.currentSegment;
   if (seg && Number.isFinite(seg.startTime) && Number.isFinite(seg.endTime)) {
@@ -2623,6 +2780,15 @@ function handleAction(action, element, payload = {}) {
       toggleLoop(enabled);
       break;
     }
+    case 'set-loop-a':
+      setLoopPoint('a');
+      break;
+    case 'set-loop-b':
+      setLoopPoint('b');
+      break;
+    case 'clear-loop':
+      clearCustomLoop();
+      break;
     case 'fullscreen': {
       const pane = $('.teacher-pane');
       if (!document.fullscreenElement && pane?.requestFullscreen) {
@@ -2756,6 +2922,18 @@ function initEvents() {
     if (control) updateLayoutPreference(control.dataset.layoutControl, control.value);
   });
   const playerVideo = $('#playerVideo');
+  const overviewVideo = $('#overviewVideo');
+  overviewVideo?.addEventListener('loadeddata', () => {
+    overviewVideo.hidden = false;
+    const fallback = $('.overview-art [data-video-fallback]');
+    if (fallback) fallback.hidden = true;
+  });
+  overviewVideo?.addEventListener('error', () => {
+    if (!overviewVideo.currentSrc) return;
+    overviewVideo.hidden = true;
+    const fallback = $('.overview-art [data-video-fallback]');
+    if (fallback) fallback.hidden = false;
+  });
   playerVideo?.addEventListener('loadedmetadata', () => {
     const actualDuration = Number(playerVideo.duration);
     if (!Number.isFinite(actualDuration) || actualDuration <= 0) return;
@@ -2813,8 +2991,7 @@ function initEvents() {
     applyLayoutPreferences();
   });
 
-  const voicePill = $('[data-voice-pill]');
-  if (voicePill) {
+  $$('[data-voice-pill]').forEach((voicePill) => {
     const start = (event) => {
       event.preventDefault();
       if (!state.voiceEnabled) {
@@ -2831,7 +3008,7 @@ function initEvents() {
     voicePill.addEventListener('mouseup', stop);
     voicePill.addEventListener('mouseleave', stop);
     voicePill.addEventListener('touchend', stop);
-  }
+  });
 }
 
 function bootstrap() {
@@ -2852,6 +3029,7 @@ function bootstrap() {
   initUpload();
   initVoiceControl();
   initEvents();
+  initPanelResizers();
   updateCourseCopy();
   updateMicrophoneUI();
   updateVoiceUI();

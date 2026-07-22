@@ -98,6 +98,18 @@ def test_course_video_score_and_delete_flow(client):
     assert client.get(f"/api/v1/courses/{course['id']}").status_code == 404
 
 
+def test_course_video_can_be_offloaded_to_nginx(client, monkeypatch):
+    course = upload_video(client).json()
+    monkeypatch.setattr(course_api.settings, "media_accel_redirect_prefix", "/_protected_videos/")
+
+    video = client.get(f"/api/v1/courses/{course['id']}/video")
+
+    assert video.status_code == 200
+    assert video.content == b""
+    assert video.headers["x-accel-redirect"].startswith("/_protected_videos/")
+    assert video.headers["cache-control"] == "public, max-age=3600, immutable"
+
+
 def test_upload_rejects_unsupported_and_oversized_files(client, monkeypatch):
     unsupported = upload_video(client, filename="lesson.txt", content_type="text/plain")
     assert unsupported.status_code == 415
