@@ -1693,6 +1693,15 @@ a:focus-visible {
 
 /* Player */
 .player-view {
+  --video-panel-size: 72fr;
+  --hand-panel-size: 28fr;
+  --timeline-scale: 1;
+  --timeline-wave-height: 52px;
+  --timeline-measure-height: 28px;
+  --timeline-chord-height: 42px;
+  --timeline-tab-height: 142px;
+  --left-hand-size: 50fr;
+  --right-hand-size: 50fr;
   background: color-mix(in srgb, var(--color-bg) 90%, #1e241d 10%);
 }
 
@@ -1811,7 +1820,7 @@ a:focus-visible {
 
 .player-grid {
   display: grid;
-  grid-template-columns: minmax(0, 2.2fr) minmax(250px, .8fr);
+  grid-template-columns: minmax(0, var(--video-panel-size)) minmax(250px, var(--hand-panel-size));
   gap: 10px;
   min-height: 0;
 }
@@ -1932,7 +1941,7 @@ a:focus-visible {
 
 .hand-stack {
   display: grid;
-  grid-template-rows: 1fr 1fr;
+  grid-template-rows: minmax(0, var(--left-hand-size)) minmax(0, var(--right-hand-size));
   gap: 10px;
   min-height: 0;
 }
@@ -2204,7 +2213,7 @@ a:focus-visible {
 }
 
 .workspace-wave {
-  height: 52px;
+  height: var(--timeline-wave-height);
   padding: 4px 8px;
 }
 
@@ -2227,18 +2236,18 @@ a:focus-visible {
 }
 
 .measure-row > div {
-  min-height: 28px;
+  min-height: var(--timeline-measure-height);
 }
 
 .chord-row > div {
-  min-height: 42px;
+  min-height: var(--timeline-chord-height);
 }
 
 .measure-row button {
   position: absolute;
   top: 0;
   bottom: 0;
-  min-height: 28px;
+  min-height: var(--timeline-measure-height);
   padding: 0 6px;
   color: var(--color-faint);
   border-right: 1px solid var(--color-line);
@@ -2254,7 +2263,7 @@ a:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 42px;
+  min-height: var(--timeline-chord-height);
   padding: 0 14px;
   color: var(--color-muted);
   border-right: 1px solid var(--color-line);
@@ -2280,7 +2289,7 @@ a:focus-visible {
 .tablature {
   position: relative;
   min-width: 0;
-  height: 142px;
+  height: var(--timeline-tab-height);
   overflow: hidden;
 }
 
@@ -3384,6 +3393,47 @@ a:focus-visible {
   font-size: 10px;
 }
 
+.layout-range-list {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.layout-range-list label {
+  display: grid;
+  gap: 9px;
+}
+
+.layout-range-list label > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.layout-range-list output {
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+
+.layout-range-list input[type="range"] {
+  width: 100%;
+  height: 4px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.layout-reset {
+  min-height: 34px;
+  margin-top: 12px;
+  padding-inline: 0;
+  color: var(--color-accent);
+  font-size: 10px;
+}
+
 .setting-row {
   display: flex;
   align-items: center;
@@ -3570,12 +3620,12 @@ a:focus-visible {
   }
 
   .player-grid {
-    grid-template-columns: minmax(0, 1.7fr) minmax(220px, .7fr);
+    grid-template-columns: minmax(0, var(--video-panel-size)) minmax(220px, var(--hand-panel-size));
   }
 
   .hand-stack {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr 1fr;
+    grid-template-rows: minmax(0, var(--left-hand-size)) minmax(0, var(--right-hand-size));
   }
 
   .comparison-card {
@@ -3609,7 +3659,7 @@ a:focus-visible {
   }
 
   .player-grid {
-    grid-template-columns: minmax(0, 1.55fr) minmax(140px, .45fr);
+    grid-template-columns: minmax(0, var(--video-panel-size)) minmax(140px, var(--hand-panel-size));
   }
 
   .topbar {
@@ -3880,7 +3930,7 @@ a:focus-visible {
 
   .hand-stack {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr 1fr;
+    grid-template-rows: minmax(0, var(--left-hand-size)) minmax(0, var(--right-hand-size));
     gap: 6px;
   }
 
@@ -4065,21 +4115,21 @@ a:focus-visible {
   }
 
   .workspace-wave {
-    height: 36px;
+    height: var(--timeline-wave-height);
   }
 
   .measure-row > div,
   .measure-row button {
-    min-height: 24px;
+    min-height: var(--timeline-measure-height);
   }
 
   .chord-row > div,
   .chord-row button {
-    min-height: 32px;
+    min-height: var(--timeline-chord-height);
   }
 
   .tablature {
-    height: 112px;
+    height: var(--timeline-tab-height);
   }
 
   .feedback-bar {

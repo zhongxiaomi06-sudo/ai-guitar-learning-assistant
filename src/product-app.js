@@ -106,6 +106,9 @@ const state = {
   timelineZoomIndex: 2,
   timelineWindowStart: -1,
   timelineWindowEnd: -1,
+  layoutVideoShare: 72,
+  layoutTimelineScale: 100,
+  layoutLeftHandShare: 50,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -119,6 +122,9 @@ function loadPreferences() {
     if (Number.isFinite(saved.playerTime)) state.playerTime = Math.min(saved.playerTime, DEMO_DURATION);
     if (typeof saved.voiceEnabled === 'boolean') state.voiceEnabled = saved.voiceEnabled;
     if (typeof saved.voiceWakeWord === 'boolean') state.voiceWakeWord = saved.voiceWakeWord;
+    if (Number.isFinite(saved.layoutVideoShare)) state.layoutVideoShare = Math.max(55, Math.min(82, saved.layoutVideoShare));
+    if (Number.isFinite(saved.layoutTimelineScale)) state.layoutTimelineScale = Math.max(75, Math.min(130, saved.layoutTimelineScale));
+    if (Number.isFinite(saved.layoutLeftHandShare)) state.layoutLeftHandShare = Math.max(30, Math.min(70, saved.layoutLeftHandShare));
   } catch {
     // 不可用的本地状态不应阻断产品页面。
   }
@@ -132,6 +138,9 @@ function savePreferences() {
       playerTime: state.playerTime,
       voiceEnabled: state.voiceEnabled,
       voiceWakeWord: state.voiceWakeWord,
+      layoutVideoShare: state.layoutVideoShare,
+      layoutTimelineScale: state.layoutTimelineScale,
+      layoutLeftHandShare: state.layoutLeftHandShare,
     }));
   } catch {
     // 隐私模式可能禁用 localStorage，界面仍可正常使用。
@@ -451,6 +460,54 @@ function setVideoSources() {
       }
     }
   });
+}
+
+function applyLayoutPreferences({ persist = false } = {}) {
+  const playerView = $('.player-view');
+  if (!playerView) return;
+  const videoShare = Math.max(55, Math.min(82, Number(state.layoutVideoShare) || 72));
+  const timelineScale = Math.max(75, Math.min(130, Number(state.layoutTimelineScale) || 100));
+  const leftHandShare = Math.max(30, Math.min(70, Number(state.layoutLeftHandShare) || 50));
+  state.layoutVideoShare = videoShare;
+  state.layoutTimelineScale = timelineScale;
+  state.layoutLeftHandShare = leftHandShare;
+  playerView.style.setProperty('--video-panel-size', `${videoShare}fr`);
+  playerView.style.setProperty('--hand-panel-size', `${100 - videoShare}fr`);
+  playerView.style.setProperty('--timeline-scale', String(timelineScale / 100));
+  playerView.style.setProperty('--left-hand-size', `${leftHandShare}fr`);
+  playerView.style.setProperty('--right-hand-size', `${100 - leftHandShare}fr`);
+  const compactHeight = window.innerHeight <= 850 && window.innerWidth > 720;
+  const scale = timelineScale / 100;
+  const timelineBases = compactHeight
+    ? { wave: 36, measure: 24, chord: 32, tab: 112 }
+    : { wave: 52, measure: 28, chord: 42, tab: 142 };
+  playerView.style.setProperty('--timeline-wave-height', `${Math.round(timelineBases.wave * scale)}px`);
+  playerView.style.setProperty('--timeline-measure-height', `${Math.round(timelineBases.measure * scale)}px`);
+  playerView.style.setProperty('--timeline-chord-height', `${Math.round(timelineBases.chord * scale)}px`);
+  playerView.style.setProperty('--timeline-tab-height', `${Math.round(timelineBases.tab * scale)}px`);
+
+  const values = { video: videoShare, timeline: timelineScale, hands: leftHandShare };
+  Object.entries(values).forEach(([name, value]) => {
+    const input = $(`[data-layout-control="${name}"]`);
+    const output = $(`[data-layout-output="${name}"]`);
+    if (input) input.value = String(value);
+    if (output) output.textContent = `${value}%`;
+  });
+  if (state.view === 'player') {
+    renderTimeline(true);
+    updatePlayerUI();
+  }
+  if (persist) savePreferences();
+}
+
+function updateLayoutPreference(name, value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return;
+  if (name === 'video') state.layoutVideoShare = numeric;
+  else if (name === 'timeline') state.layoutTimelineScale = numeric;
+  else if (name === 'hands') state.layoutLeftHandShare = numeric;
+  else return;
+  applyLayoutPreferences({ persist: true });
 }
 
 function normalizeTimeSignature(value) {
@@ -2533,10 +2590,18 @@ function handleAction(action, element, payload = {}) {
       skipMicrophone();
       break;
     case 'open-settings':
+      applyLayoutPreferences();
       openLayer($('[data-settings-layer]'));
       break;
     case 'close-settings':
       closeLayer($('[data-settings-layer]'));
+      break;
+    case 'reset-layout':
+      state.layoutVideoShare = 72;
+      state.layoutTimelineScale = 100;
+      state.layoutLeftHandShare = 50;
+      applyLayoutPreferences({ persist: true });
+      showToast('跟练面板尺寸已恢复默认。');
       break;
     case 'close-voice-help':
       closeLayer($('[data-voice-help]'));
@@ -2686,6 +2751,10 @@ function initUpload() {
 
 function initEvents() {
   document.addEventListener('click', handleClick);
+  document.addEventListener('input', (event) => {
+    const control = event.target.closest?.('[data-layout-control]');
+    if (control) updateLayoutPreference(control.dataset.layoutControl, control.value);
+  });
   const playerVideo = $('#playerVideo');
   playerVideo?.addEventListener('loadedmetadata', () => {
     const actualDuration = Number(playerVideo.duration);
@@ -2741,7 +2810,7 @@ function initEvents() {
     voiceController?.stop?.();
   });
   window.addEventListener('resize', () => {
-    if (state.view === 'player') updatePlayerUI();
+    applyLayoutPreferences();
   });
 
   const voicePill = $('[data-voice-pill]');
@@ -2767,6 +2836,7 @@ function initEvents() {
 
 function bootstrap() {
   loadPreferences();
+  applyLayoutPreferences();
   // ?sim=<mode> 开启 MIDI/程序化用户模拟，替代真实麦克风监听。
   // 支持 perfect / miss / late50 / late100 / late200 / early50 / early100 /
   // wrong@<time> / wrong@id=<id> / jitter / partial。

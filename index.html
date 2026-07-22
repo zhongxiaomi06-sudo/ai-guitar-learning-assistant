@@ -498,6 +498,24 @@
         <div class="setting-block setting-row"><div><strong>语音控制</strong><span>按住顶部语音按钮，用口令控制播放</span></div><button class="switch" type="button" role="switch" aria-checked="false" data-action="toggle-voice"><i></i></button></div>
         <div class="setting-block setting-row"><div><strong>唤醒词模式</strong><span>先说“弦间”再下命令，减少误触发</span></div><button class="switch" type="button" role="switch" aria-checked="false" data-action="toggle-wake-word"><i></i></button></div>
         <div class="setting-block"><div><strong>语音命令</strong><span>查看可用口令</span></div><button class="text-button" type="button" data-action="show-voice-help">查看命令</button></div>
+        <div class="setting-block layout-setting-block">
+          <div><strong>跟练面板尺寸</strong><span>调整主视频、谱面和左右手特写所占空间；设置仅保存在当前浏览器</span></div>
+          <div class="layout-range-list">
+            <label>
+              <span>主视频宽度 <output data-layout-output="video">72%</output></span>
+              <input type="range" min="55" max="82" step="1" value="72" data-layout-control="video" aria-label="主视频宽度">
+            </label>
+            <label>
+              <span>谱面高度 <output data-layout-output="timeline">100%</output></span>
+              <input type="range" min="75" max="130" step="5" value="100" data-layout-control="timeline" aria-label="谱面高度">
+            </label>
+            <label>
+              <span>左手特写占比 <output data-layout-output="hands">50%</output></span>
+              <input type="range" min="30" max="70" step="5" value="50" data-layout-control="hands" aria-label="左手特写占比">
+            </label>
+          </div>
+          <button class="text-button layout-reset" type="button" data-action="reset-layout">恢复默认尺寸</button>
+        </div>
         <div class="setting-block"><div><strong>界面模式</strong><span>选择适合当前环境的对比度</span></div><div class="segmented-control"><button class="is-active" type="button" data-theme-choice="light">暖纸</button><button type="button" data-theme-choice="dark">夜间</button></div></div>
         <div class="settings-foot"><span class="status-dot"></span><p><strong data-mic-label>麦克风未开启</strong><small>开始跟练时可进行环境校准</small></p><button type="button" data-action="open-mic">设置</button></div>
       </aside>
