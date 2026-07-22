@@ -435,17 +435,19 @@ function updateCourseCopy() {
 function setVideoSources() {
   const mediaSource = state.videoUrl || state.remoteVideoUrl;
   const mappings = [
-    ['analysisVideo', '.media-stage', 'analysis', 'metadata'],
-    ['overviewVideo', '.overview-art', 'overview', 'none'],
-    ['playerVideo', '.teacher-video', 'player', 'auto'],
+    ['analysisVideo', '.media-stage', ['analysis'], 'metadata'],
+    ['overviewVideo', '.overview-art', ['overview'], 'none'],
+    // 专项练习仍复用主播放器。不要在 player/focus 之间卸载 src，
+    // 否则返回完整跟练时会重新请求视频并丢失可播放状态。
+    ['playerVideo', '.teacher-video', ['player', 'focus'], 'auto'],
   ];
 
-  mappings.forEach(([id, parentSelector, ownerView, preload]) => {
+  mappings.forEach(([id, parentSelector, ownerViews, preload]) => {
     const video = document.getElementById(id);
     const parent = $(parentSelector);
     const fallback = parent?.querySelector('[data-video-fallback]');
     if (!video) return;
-    const shouldLoad = Boolean(mediaSource) && state.view === ownerView;
+    const shouldLoad = Boolean(mediaSource) && ownerViews.includes(state.view);
     if (shouldLoad) {
       video.preload = preload;
       if (video.getAttribute('src') !== mediaSource) {
@@ -1597,8 +1599,17 @@ function playPlayer() {
   state.lastFrameAt = performance.now();
   startPracticeSession();
   if ((state.videoUrl || state.remoteVideoUrl) && video) {
-    video.currentTime = Math.min(state.playerTime, video.duration || state.duration);
     video.playbackRate = state.playerSpeed;
+    const restorePosition = () => {
+      if (!['player', 'focus'].includes(state.view)) return;
+      const mediaDuration = Number.isFinite(video.duration) && video.duration > 0
+        ? video.duration
+        : state.duration;
+      const target = Math.max(0, Math.min(state.playerTime, mediaDuration));
+      if (Math.abs(video.currentTime - target) > 0.15) video.currentTime = target;
+    };
+    if (video.readyState >= 1) restorePosition();
+    else video.addEventListener('loadedmetadata', restorePosition, { once: true });
     video.play().catch(() => {
       state.playing = false;
       showToast('浏览器阻止了自动播放，请再点一次播放。', 'error');
