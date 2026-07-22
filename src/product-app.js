@@ -10,6 +10,13 @@ import { FocusStateMachine, SpeedAction, summarizeAttempt } from './core/practic
 import { UserSimulator } from './core/practice/simulator.js';
 import { scorePracticeResults } from './core/practice/scoring.js';
 import { beginnerProgress, moveBeginnerStep, normalizeBeginnerStep } from './core/practice/beginner.js';
+import {
+  cropForHand,
+  dragHandCrop,
+  normalizeHandCropOffsets,
+  normalizePanelStates,
+  overwriteLatestResult,
+} from './core/practice/workspace.js';
 import { ScoreModel } from './core/score/model.js';
 import { TimelineModel } from './core/score/timelineModel.js';
 import { VoiceController } from './core/voice/controller.js';
@@ -114,6 +121,9 @@ const state = {
   layoutTimelineScale: 100,
   layoutLeftHandShare: 50,
   handViewMode: 'guide',
+  handCropOffsets: normalizeHandCropOffsets(),
+  minimizedPanels: normalizePanelStates(),
+  scoringEnabled: true,
   scoringPass: 0,
   lastScoringTime: 0,
   scoreHistory: {},
@@ -136,6 +146,9 @@ function loadPreferences() {
     if (Number.isFinite(saved.layoutTimelineScale)) state.layoutTimelineScale = Math.max(75, Math.min(130, saved.layoutTimelineScale));
     if (Number.isFinite(saved.layoutLeftHandShare)) state.layoutLeftHandShare = Math.max(30, Math.min(70, saved.layoutLeftHandShare));
     if (saved.handViewMode === 'guide' || saved.handViewMode === 'zoom') state.handViewMode = saved.handViewMode;
+    state.handCropOffsets = normalizeHandCropOffsets(saved.handCropOffsets);
+    state.minimizedPanels = normalizePanelStates(saved.minimizedPanels);
+    if (typeof saved.scoringEnabled === 'boolean') state.scoringEnabled = saved.scoringEnabled;
     if (saved.scoreHistory && typeof saved.scoreHistory === 'object') state.scoreHistory = saved.scoreHistory;
     if (typeof saved.beginnerComplete === 'boolean') state.beginnerComplete = saved.beginnerComplete;
   } catch {
@@ -155,6 +168,9 @@ function savePreferences() {
       layoutTimelineScale: state.layoutTimelineScale,
       layoutLeftHandShare: state.layoutLeftHandShare,
       handViewMode: state.handViewMode,
+      handCropOffsets: state.handCropOffsets,
+      minimizedPanels: state.minimizedPanels,
+      scoringEnabled: state.scoringEnabled,
       scoreHistory: state.scoreHistory,
       beginnerComplete: state.beginnerComplete,
     }));
@@ -534,6 +550,149 @@ function updateLayoutPreference(name, value, { persist = true } = {}) {
   else if (name === 'hands') state.layoutLeftHandShare = numeric;
   else return;
   applyLayoutPreferences({ persist });
+}
+
+const PANEL_SELECTORS = {
+  video: '.teacher-pane',
+  hands: '.hand-stack',
+  left: '.left-hand-pane',
+  right: '.right-hand-pane',
+  timeline: '.timeline-pane',
+  feedback: '.feedback-bar',
+};
+
+const PANEL_NAMES = {
+  video: '原始教学视频',
+  hands: '双手动作面板',
+  left: '左手面板',
+  right: '右手面板',
+  timeline: '谱面与时间轴',
+  feedback: '评分反馈',
+};
+
+function applyPanelStates({ persist = false } = {}) {
+  const playerView = $('.player-view');
+  Object.entries(PANEL_SELECTORS).forEach(([id, selector]) => {
+    const minimized = state.minimizedPanels[id] === true;
+    $(selector)?.classList.toggle('is-minimized', minimized);
+    playerView?.classList.toggle(`is-panel-${id}-minimized`, minimized);
+    $$(`[data-panel-toggle="${id}"]`).forEach((button) => {
+      button.setAttribute('aria-expanded', String(!minimized));
+      button.setAttribute('aria-label', `${minimized ? '恢复' : '最小化'}${PANEL_NAMES[id]}`);
+      const icon = $('span', button);
+      if (icon) icon.textContent = minimized ? '+' : '−';
+    });
+  });
+  if (state.view === 'player') {
+    renderTimeline(true);
+    updatePlayerUI();
+  }
+  if (persist) savePreferences();
+}
+
+function togglePanel(id) {
+  if (!(id in PANEL_SELECTORS)) return;
+  state.minimizedPanels[id] = !state.minimizedPanels[id];
+  applyPanelStates({ persist: true });
+}
+
+function applyScoringMode({ persist = false } = {}) {
+  const enabled = state.scoringEnabled !== false;
+  $('.player-view')?.classList.toggle('is-scoring-disabled', !enabled);
+  $$('[data-scoring-toggle]').forEach((button) => {
+    button.classList.toggle('is-on', enabled);
+    button.setAttribute('aria-pressed', String(enabled));
+    if (button.getAttribute('role') === 'switch') button.setAttribute('aria-checked', String(enabled));
+  });
+  $$('[data-scoring-label]').forEach((label) => {
+    label.textContent = enabled ? '评分开启' : '评分关闭';
+  });
+  if (state.view === 'player') updatePlayerUI();
+  if (persist) savePreferences();
+}
+
+function setScoringMode(enabled) {
+  state.scoringEnabled = Boolean(enabled);
+  if (!state.scoringEnabled) {
+    resetPracticeResults();
+    state.scoringPass += 1;
+    state.lastScoringTime = state.playerTime;
+  }
+  applyScoringMode({ persist: true });
+  showToast(state.scoringEnabled
+    ? '评分模式已开启，将继续记录音准、节奏与完整度。'
+    : '评分模式已关闭，视频、谱面和动作仍会保持同步。');
+}
+
+function resetHandCrop(hand, { persist = true } = {}) {
+  if (!state.handCropOffsets[hand]) return;
+  state.handCropOffsets[hand] = { x: 0, y: 0 };
+  drawHandCloseups();
+  if (persist) savePreferences();
+}
+
+function initHandCropDragging() {
+  $$('[data-hand-canvas]').forEach((canvas) => {
+    const hand = canvas.dataset.handCanvas;
+    canvas.addEventListener('pointerdown', (event) => {
+      if (state.handViewMode !== 'zoom') return;
+      event.preventDefault();
+      const startX = event.clientX;
+      const startY = event.clientY;
+      const startOffset = { ...state.handCropOffsets[hand] };
+      canvas.classList.add('is-dragging');
+      canvas.setPointerCapture?.(event.pointerId);
+
+      const move = (moveEvent) => {
+        const bounds = canvas.getBoundingClientRect();
+        state.handCropOffsets[hand] = dragHandCrop(
+          hand,
+          startOffset,
+          (moveEvent.clientX - startX) / Math.max(1, bounds.width),
+          (moveEvent.clientY - startY) / Math.max(1, bounds.height),
+        );
+        drawHandCloseups();
+      };
+      const end = () => {
+        canvas.classList.remove('is-dragging');
+        canvas.removeEventListener('pointermove', move);
+        canvas.removeEventListener('pointerup', end);
+        canvas.removeEventListener('pointercancel', end);
+        savePreferences();
+      };
+      canvas.addEventListener('pointermove', move);
+      canvas.addEventListener('pointerup', end);
+      canvas.addEventListener('pointercancel', end);
+    });
+
+    canvas.addEventListener('dblclick', () => {
+      if (state.handViewMode !== 'zoom') return;
+      resetHandCrop(hand);
+      showToast(`${hand === 'left' ? '左手' : '右手'}取景已恢复默认。`);
+    });
+
+    canvas.addEventListener('keydown', (event) => {
+      if (state.handViewMode !== 'zoom') return;
+      if (event.key === 'Home') {
+        event.preventDefault();
+        resetHandCrop(hand);
+        return;
+      }
+      const directions = {
+        ArrowLeft: [-0.02, 0],
+        ArrowRight: [0.02, 0],
+        ArrowUp: [0, -0.02],
+        ArrowDown: [0, 0.02],
+      };
+      const delta = directions[event.key];
+      if (!delta) return;
+      event.preventDefault();
+      const current = state.handCropOffsets[hand];
+      state.handCropOffsets[hand] = dragHandCrop(hand, current, delta[0], delta[1]);
+      drawHandCloseups();
+      savePreferences();
+    });
+  });
 }
 
 function initPanelResizers() {
@@ -1655,6 +1814,7 @@ function startPracticeSession() {
 function resetPracticeResults() {
   state.sessionId = null;
   state.practiceResults = [];
+  state.focusResults = [];
   state.lastResult = null;
   state.scoringPass = 0;
   state.lastScoringTime = state.playerTime;
@@ -1789,12 +1949,12 @@ function renderMasteryMap(weakSpots, _summary) {
 
 function appendPracticeRecord(record) {
   record.eventScore = scorePracticeResults([record]).total;
-  state.practiceResults.push(record);
-  if (state.focusMode) state.focusResults.push(record);
+  overwriteLatestResult(state.practiceResults, record);
+  if (state.focusMode) overwriteLatestResult(state.focusResults, record);
 }
 
 function recordExpiredTargets(fromTime, toTime) {
-  if (!state.micAllowed || !state.scoreModel || toTime <= fromTime) return;
+  if (!state.scoringEnabled || !state.micAllowed || !state.scoreModel || toTime <= fromTime) return;
   for (const note of state.scoreModel.notes) {
     if (note.endTime <= fromTime) continue;
     if (note.endTime > toTime) break;
@@ -1859,7 +2019,7 @@ function playerFrame(timestamp) {
   }
 
   // 实时匹配：有目标音符、有有效检测、有起音时判定
-  if (state.playing && state.micAllowed && state.matchingEngine && state.currentNote) {
+  if (state.scoringEnabled && state.playing && state.micAllowed && state.matchingEngine && state.currentNote) {
     const detection = state.lastDetection;
     const hasPitch = detection?.rms >= 0.005
       && detection?.pitch?.confidence >= 0.65
@@ -1919,8 +2079,12 @@ function playerFrame(timestamp) {
   if (state.focusMode && state.loopEnabled && state.playerTime >= state.focusLoopEnd) {
     state.focusLoopCount += 1;
     if (state.focusLoopCount >= 2) {
-      pausePlayer();
-      evaluateFocusAttempt();
+      if (state.scoringEnabled) {
+        pausePlayer();
+        evaluateFocusAttempt();
+      } else {
+        seekPlayer(state.focusLoopStart);
+      }
       state.focusLoopCount = 0;
     } else {
       seekPlayer(state.focusLoopStart);
@@ -1984,18 +2148,9 @@ function drawHandCloseups() {
   if (state.handViewMode !== 'zoom') return;
   const video = $('#playerVideo');
   if (!video || video.readyState < 2 || !video.videoWidth || !video.videoHeight) return;
-  const crops = state.handViewMode === 'zoom'
-    ? {
-      left: { x: 0.705, y: 0.45, width: 0.24, height: 0.36 },
-      right: { x: 0.14, y: 0.45, width: 0.28, height: 0.34 },
-    }
-    : {
-      // 示例视频：按弦手位于画面右侧指板，拨弦手位于左下音孔。
-      left: { x: 0.66, y: 0.38, width: 0.33, height: 0.5 },
-      right: { x: 0.08, y: 0.38, width: 0.4, height: 0.48 },
-    };
   $$('[data-hand-canvas]').forEach((canvas) => {
-    const crop = crops[canvas.dataset.handCanvas];
+    const hand = canvas.dataset.handCanvas;
+    const crop = cropForHand(hand, state.handCropOffsets[hand]);
     const bounds = canvas.getBoundingClientRect();
     if (!crop || bounds.width < 2 || bounds.height < 2) return;
     const ratio = Math.min(2, window.devicePixelRatio || 1);
@@ -2229,7 +2384,11 @@ function updatePlayerUI() {
   const lastResult = state.lastResult;
   const resultFresh = lastResult && Math.abs(state.playerTime - lastResult.currentTime) < 1.2;
 
-  if (!state.playing) {
+  if (!state.scoringEnabled) {
+    title.textContent = '评分已关闭';
+    copy.textContent = '视频、谱面和动作保持同步；自动纠错仍可使用，重新开启后继续判定。';
+    score.textContent = '--';
+  } else if (!state.playing) {
     title.textContent = state.playerTime > 0 ? '已暂停' : '准备就绪';
     copy.textContent = state.playerTime > 0 ? '可点击谱面音符精确定位。' : '点击播放，跟随老师开始演奏。';
     score.textContent = '--';
@@ -2268,12 +2427,16 @@ function updatePlayerUI() {
     score.textContent = '--';
   }
 
-  const liveScore = scorePracticeResults(state.practiceResults);
-  const hasJudgements = state.practiceResults.some((result) => result.resultType !== 'extra');
-  score.textContent = hasJudgements ? String(liveScore.total) : '--';
-  score.title = hasJudgements
-    ? `音准 ${liveScore.noteAccuracy} · 完整度 ${liveScore.completeness} · 节奏 ${liveScore.timing}`
-    : '完成演奏判定后显示综合得分';
+  if (state.scoringEnabled) {
+    const liveScore = scorePracticeResults(state.practiceResults);
+    const hasJudgements = state.practiceResults.some((result) => result.resultType !== 'extra');
+    score.textContent = hasJudgements ? String(liveScore.total) : '--';
+    score.title = hasJudgements
+      ? `音准 ${liveScore.noteAccuracy} · 完整度 ${liveScore.completeness} · 节奏 ${liveScore.timing}`
+      : '完成演奏判定后显示综合得分';
+  } else {
+    score.title = '评分模式已关闭';
+  }
 
   renderHandStack();
 }
@@ -3019,7 +3182,11 @@ function handleAction(action, element, payload = {}) {
       state.layoutVideoShare = 72;
       state.layoutTimelineScale = 100;
       state.layoutLeftHandShare = 50;
+      state.minimizedPanels = normalizePanelStates();
+      state.handCropOffsets = normalizeHandCropOffsets();
       applyLayoutPreferences({ persist: true });
+      applyPanelStates({ persist: true });
+      drawHandCloseups();
       showToast('跟练面板尺寸已恢复默认。');
       break;
     case 'close-voice-help':
@@ -3028,6 +3195,9 @@ function handleAction(action, element, payload = {}) {
     case 'toggle-auto-slow':
       toggleSwitch(element);
       state.autoSlowDown = element.classList.contains('is-on');
+      break;
+    case 'toggle-scoring':
+      setScoringMode(!state.scoringEnabled);
       break;
     case 'toggle-overlay':
       toggleSwitch(element);
@@ -3110,6 +3280,12 @@ function handleClick(event) {
   const actionButton = event.target.closest('[data-action]');
   if (actionButton) {
     handleAction(actionButton.dataset.action, actionButton);
+    return;
+  }
+
+  const panelButton = event.target.closest('[data-panel-toggle]');
+  if (panelButton) {
+    togglePanel(panelButton.dataset.panelToggle);
     return;
   }
 
@@ -3300,7 +3476,10 @@ function bootstrap() {
   initVoiceControl();
   initEvents();
   initPanelResizers();
+  initHandCropDragging();
   applyHandViewMode();
+  applyPanelStates();
+  applyScoringMode();
   updateCourseCopy();
   updateMicrophoneUI();
   updateVoiceUI();

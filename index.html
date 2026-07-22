@@ -272,6 +272,7 @@
               </div>
               <button class="workspace-action" type="button" data-voice-pill aria-label="按住进行语音控制" aria-pressed="false"><span class="voice-dot" data-voice-dot aria-hidden="true"></span>语音</button>
               <button class="workspace-action" type="button" data-action="open-mic"><span class="status-dot" aria-hidden="true"></span><span data-mic-label>麦克风</span></button>
+              <button class="workspace-action is-on" type="button" data-action="toggle-scoring" data-scoring-toggle aria-pressed="true"><span class="score-mode-dot" aria-hidden="true"></span><span data-scoring-label>评分开启</span></button>
               <button class="workspace-action" type="button" data-action="open-settings">设置</button>
               <button class="secondary-button compact-button" type="button" data-action="finish-practice">结束练习</button>
             </div>
@@ -279,6 +280,7 @@
 
           <div class="player-grid">
             <section class="teacher-pane" aria-label="原始教学视频">
+              <button class="panel-collapse-button panel-collapse-floating" type="button" data-panel-toggle="video" aria-label="最小化原始教学视频" aria-expanded="true"><span aria-hidden="true">−</span></button>
               <div class="teacher-video">
                 <video id="playerVideo" playsinline hidden></video>
                 <div class="abstract-video player-fallback" data-video-fallback>
@@ -313,30 +315,33 @@
                 <div role="group" aria-label="手部动作显示模式">
                   <button class="is-active" type="button" data-hand-view="guide" aria-pressed="true">动作示意</button>
                   <button type="button" data-hand-view="zoom" aria-pressed="false">视频放大</button>
+                  <button class="panel-collapse-button" type="button" data-panel-toggle="hands" aria-label="最小化双手动作面板" aria-expanded="true"><span aria-hidden="true">−</span></button>
                 </div>
               </div>
               <article class="hand-pane left-hand-pane">
-                <header><span>左手 · 指板</span><b data-left-confidence>视频同步裁切</b></header>
+                <header><span>左手 · 指板</span><div class="hand-header-actions"><b data-left-confidence>视频同步裁切</b><button class="panel-collapse-button" type="button" data-panel-toggle="left" aria-label="最小化左手面板" aria-expanded="true"><span aria-hidden="true">−</span></button></div></header>
                 <div class="hand-video-crop">
-                  <canvas data-hand-canvas="left" aria-label="从原始教学视频同步裁切的左手指板画面"></canvas>
+                  <canvas data-hand-canvas="left" tabindex="0" aria-label="从原始教学视频同步裁切的左手指板画面，可拖动调整取景"></canvas>
                   <div class="hand-action-guide left-action-guide" data-hand-guide="left" aria-label="左手按弦动作示意图">
                     <div class="fretboard-guide" aria-hidden="true"><span class="fret-nut"></span><div data-left-guide-dots></div></div>
                     <p><strong data-left-guide-title>等待当前音符</strong><small data-left-guide-copy>将在指板上标出琴弦、品位和手指</small></p>
                   </div>
                   <div class="hand-crop-placeholder">播放视频后显示左手画面</div>
+                  <div class="hand-drag-hint">拖动调整取景 · 双击复位</div>
                   <div class="motion-arrow"><small data-left-next>谱面提示：等待当前音符</small></div>
                 </div>
                 <footer data-left-fingers><span>指法信息由谱面推导，仅作辅助</span></footer>
               </article>
               <article class="hand-pane right-hand-pane">
-                <header><span>右手 · 音孔</span><b data-right-confidence>视频同步裁切</b></header>
+                <header><span>右手 · 音孔</span><div class="hand-header-actions"><b data-right-confidence>视频同步裁切</b><button class="panel-collapse-button" type="button" data-panel-toggle="right" aria-label="最小化右手面板" aria-expanded="true"><span aria-hidden="true">−</span></button></div></header>
                 <div class="hand-video-crop">
-                  <canvas data-hand-canvas="right" aria-label="从原始教学视频同步裁切的右手拨弦画面"></canvas>
+                  <canvas data-hand-canvas="right" tabindex="0" aria-label="从原始教学视频同步裁切的右手拨弦画面，可拖动调整取景"></canvas>
                   <div class="hand-action-guide right-action-guide" data-hand-guide="right" aria-label="右手拨弦动作示意图">
                     <div class="string-guide" data-right-guide-strings aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><b data-right-guide-arrow>↓</b></div>
                     <p><strong data-right-guide-title>等待当前音符</strong><small data-right-guide-copy>将在琴弦上标出拨弦方向和手指</small></p>
                   </div>
                   <div class="hand-crop-placeholder">播放视频后显示右手画面</div>
+                  <div class="hand-drag-hint">拖动调整取景 · 双击复位</div>
                   <div class="pick-overlay"><strong data-right-direction>·</strong><div><span data-right-finger>等待当前音符</span><small data-right-detail>谱面推导提示</small></div></div>
                 </div>
                 <footer><span data-right-next>拨弦信息由谱面推导，仅作辅助</span></footer>
@@ -353,6 +358,7 @@
                 <button type="button" data-action="timeline-zoom-out" aria-label="缩小谱面">−</button>
                 <button type="button" data-action="timeline-zoom-reset" data-timeline-zoom>6 小节</button>
                 <button type="button" data-action="timeline-zoom-in" aria-label="放大谱面">＋</button>
+                <button class="panel-collapse-button" type="button" data-panel-toggle="timeline" aria-label="最小化谱面与时间轴" aria-expanded="true"><span aria-hidden="true">−</span></button>
               </div>
             </div>
             <div class="waveform-row">
@@ -381,10 +387,12 @@
           </section>
 
           <section class="feedback-bar" aria-live="polite">
+            <span class="panel-mini-label">实时评分与反馈</span>
             <div class="listen-state"><span class="listening-rings" aria-hidden="true"><i></i></span><div><small>实时判定</small><strong data-feedback-title>准备就绪</strong></div></div>
             <p data-feedback-copy>点击播放，跟随老师开始演奏。</p>
             <div class="live-score"><small>实时得分</small><strong data-live-score>--</strong></div>
             <button class="issue-button" type="button" data-action="open-focus"><span>第 6 小节有一个换把难点</span><strong>查看 →</strong></button>
+            <button class="panel-collapse-button" type="button" data-panel-toggle="feedback" aria-label="最小化评分反馈" aria-expanded="true"><span aria-hidden="true">−</span></button>
           </section>
         </div>
       </section>
@@ -524,6 +532,7 @@
       <aside class="settings-drawer" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
         <header><div><p class="eyebrow"><span></span>PREFERENCES</p><h2 id="settingsTitle">练习设置</h2></div><button class="modal-close" type="button" data-action="close-settings" aria-label="关闭">×</button></header>
         <div class="setting-block"><div><strong>反馈容错</strong><span>调整实时判定的严格程度</span></div><div class="segmented-control"><button type="button" data-tolerance="gentle">宽松</button><button class="is-active" type="button" data-tolerance="normal">标准</button><button type="button" data-tolerance="strict">严格</button></div></div>
+        <div class="setting-block"><div><strong>评分模式</strong><span>关闭后保留同步播放，不记录得分或自动进入纠错</span></div><button class="switch is-on" type="button" role="switch" aria-checked="true" data-action="toggle-scoring" data-scoring-toggle><i></i></button></div>
         <div class="setting-block setting-row"><div><strong>自动降速</strong><span>连续出错时自动进入专项练习</span></div><button class="switch is-on" type="button" role="switch" aria-checked="true" data-action="toggle-auto-slow"><i></i></button></div>
         <div class="setting-block setting-row"><div><strong>显示 AI 动作标记</strong><span>在双手特写上标出落指与方向</span></div><button class="switch is-on" type="button" role="switch" aria-checked="true" data-action="toggle-overlay"><i></i></button></div>
         <div class="setting-block setting-row"><div><strong>语音控制</strong><span>按住顶部语音按钮，用口令控制播放</span></div><button class="switch" type="button" role="switch" aria-checked="false" data-action="toggle-voice"><i></i></button></div>
