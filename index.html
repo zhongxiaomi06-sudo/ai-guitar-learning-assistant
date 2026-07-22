@@ -306,7 +306,7 @@
               <div class="hand-mode-toolbar">
                 <span>手部视图</span>
                 <div role="group" aria-label="手部动作显示模式">
-                  <button class="is-active" type="button" data-hand-view="guide" aria-pressed="true">动作提示</button>
+                  <button class="is-active" type="button" data-hand-view="guide" aria-pressed="true">动作示意</button>
                   <button type="button" data-hand-view="zoom" aria-pressed="false">视频放大</button>
                 </div>
               </div>
@@ -314,6 +314,10 @@
                 <header><span>左手 · 指板</span><b data-left-confidence>视频同步裁切</b></header>
                 <div class="hand-video-crop">
                   <canvas data-hand-canvas="left" aria-label="从原始教学视频同步裁切的左手指板画面"></canvas>
+                  <div class="hand-action-guide left-action-guide" data-hand-guide="left" aria-label="左手按弦动作示意图">
+                    <div class="fretboard-guide" aria-hidden="true"><span class="fret-nut"></span><div data-left-guide-dots></div></div>
+                    <p><strong data-left-guide-title>等待当前音符</strong><small data-left-guide-copy>将在指板上标出琴弦、品位和手指</small></p>
+                  </div>
                   <div class="hand-crop-placeholder">播放视频后显示左手画面</div>
                   <div class="motion-arrow"><small data-left-next>谱面提示：等待当前音符</small></div>
                 </div>
@@ -323,6 +327,10 @@
                 <header><span>右手 · 音孔</span><b data-right-confidence>视频同步裁切</b></header>
                 <div class="hand-video-crop">
                   <canvas data-hand-canvas="right" aria-label="从原始教学视频同步裁切的右手拨弦画面"></canvas>
+                  <div class="hand-action-guide right-action-guide" data-hand-guide="right" aria-label="右手拨弦动作示意图">
+                    <div class="string-guide" data-right-guide-strings aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><b data-right-guide-arrow>↓</b></div>
+                    <p><strong data-right-guide-title>等待当前音符</strong><small data-right-guide-copy>将在琴弦上标出拨弦方向和手指</small></p>
+                  </div>
                   <div class="hand-crop-placeholder">播放视频后显示右手画面</div>
                   <div class="pick-overlay"><strong data-right-direction>·</strong><div><span data-right-finger>等待当前音符</span><small data-right-detail>谱面推导提示</small></div></div>
                 </div>
@@ -370,7 +378,7 @@
           <section class="feedback-bar" aria-live="polite">
             <div class="listen-state"><span class="listening-rings" aria-hidden="true"><i></i></span><div><small>实时判定</small><strong data-feedback-title>准备就绪</strong></div></div>
             <p data-feedback-copy>点击播放，跟随老师开始演奏。</p>
-            <div class="live-score"><small>当前小节</small><strong data-live-score>--</strong></div>
+            <div class="live-score"><small>实时得分</small><strong data-live-score>--</strong></div>
             <button class="issue-button" type="button" data-action="open-focus"><span>第 6 小节有一个换把难点</span><strong>查看 →</strong></button>
           </section>
         </div>
@@ -443,7 +451,7 @@
               <div class="score-note"><i data-score-delta>--</i><span>相比首次练习</span></div>
             </section>
             <section class="metric-card card-surface"><span>01</span><small>音符正确率</small><strong data-accuracy>0%</strong><div><i data-accuracy-bar style="--value:0%"></i></div><p data-accuracy-label>--</p></section>
-            <section class="metric-card card-surface"><span>02</span><small>和弦完整度</small><strong data-chord-completeness>0%</strong><div><i data-chord-bar style="--value:0%"></i></div><p data-chord-label>--</p></section>
+            <section class="metric-card card-surface"><span>02</span><small>和弦 / 发音完整度</small><strong data-chord-completeness>0%</strong><div><i data-chord-bar style="--value:0%"></i></div><p data-chord-label>--</p></section>
             <section class="metric-card card-surface"><span>03</span><small>节奏稳定度</small><strong data-timing>0%</strong><div><i data-timing-bar style="--value:0%"></i></div><p data-timing-label>--</p></section>
           </div>
 
