@@ -8,6 +8,7 @@ import {
   estimateLatency,
   classifyEnvironment,
   DEFAULT_ONSET_THRESHOLD,
+  MAX_ONSET_THRESHOLD,
   NOISE_TOO_HIGH,
   LATENCY_TOO_HIGH,
 } from '../src/core/audio/calibrator.js';
@@ -37,9 +38,9 @@ test('computeThreshold falls back to default when noise is low/zero', () => {
   assert.equal(computeThreshold(0.001), DEFAULT_ONSET_THRESHOLD);
 });
 
-test('computeThreshold scales noise floor by 2.5x when noisy', () => {
-  // 0.03 * 2.5 = 0.075 > default 0.02
-  assert.ok(Math.abs(computeThreshold(0.03) - 0.075) < 1e-9);
+test('computeThreshold scales noise floor but caps a calibration-time guitar spike', () => {
+  assert.equal(computeThreshold(0.01), 0.025);
+  assert.equal(computeThreshold(0.03), MAX_ONSET_THRESHOLD);
   assert.ok(computeThreshold(0.03) > DEFAULT_ONSET_THRESHOLD);
 });
 

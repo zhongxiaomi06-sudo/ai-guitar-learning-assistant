@@ -8,6 +8,8 @@
 
 /** 默认 onset 阈值（RMS），用于环境噪声很低时。 */
 export const DEFAULT_ONSET_THRESHOLD = 0.02;
+/** 避免校准期间的拨弦尖峰把起音门槛抬到普通木吉他无法触发的程度。 */
+export const MAX_ONSET_THRESHOLD = 0.05;
 /** 校准采样的最小/最大噪声样本数，避免极端环境卡死。 */
 const MIN_NOISE_SAMPLES = 8;
 const MAX_NOISE_SAMPLES = 240;
@@ -46,7 +48,7 @@ export function percentile(values, p) {
  */
 export function computeThreshold(noiseFloor, defaultThreshold = DEFAULT_ONSET_THRESHOLD) {
   const base = Number.isFinite(noiseFloor) && noiseFloor > 0 ? noiseFloor * 2.5 : 0;
-  return Math.max(defaultThreshold, base);
+  return Math.min(MAX_ONSET_THRESHOLD, Math.max(defaultThreshold, base));
 }
 
 /**

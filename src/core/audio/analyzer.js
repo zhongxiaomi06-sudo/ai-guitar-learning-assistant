@@ -91,7 +91,9 @@ export class AudioAnalyzer {
     const rms = this.computeRMS(this.buffer);
     return {
       pitch: this.detectPitchFromBuffer(this.buffer, rms),
-      onset: rms > onsetThreshold && rms > prevRms * 1.5,
+      // 普通麦克风常带有自动增益，吉他起音不一定能在相邻
+      // 两帧间跳升 50%。25% 仍能排除稳定背景噪声，同时少漏掉轻拨弦。
+      onset: rms > onsetThreshold && rms > prevRms * 1.25,
       rms,
     };
   }

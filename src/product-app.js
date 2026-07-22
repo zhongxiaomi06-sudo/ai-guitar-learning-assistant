@@ -479,6 +479,10 @@ function setVideoSources() {
     const shouldLoad = Boolean(mediaSource) && ownerViews.includes(state.view);
     if (shouldLoad) {
       video.preload = preload;
+      if (id === 'playerVideo') {
+        video.muted = false;
+        video.volume = 1;
+      }
       if (video.getAttribute('src') !== mediaSource) {
         video.src = mediaSource;
         video.load();
@@ -1772,6 +1776,8 @@ function playPlayer() {
   state.lastScoringTime = state.playerTime;
   startPracticeSession();
   if ((state.videoUrl || state.remoteVideoUrl) && video) {
+    if (video.volume === 0) video.volume = 1;
+    updateMuteButton();
     video.playbackRate = state.playerSpeed;
     const restorePosition = () => {
       if (!['player', 'focus'].includes(state.view)) return;
@@ -1800,6 +1806,25 @@ function pausePlayer() {
   cancelAnimationFrame(state.animationFrame);
   state.animationFrame = null;
   updatePlayerUI();
+}
+
+function updateMuteButton() {
+  const video = $('#playerVideo');
+  const button = $('[data-mute-button]');
+  if (!video || !button) return;
+  const muted = video.muted || video.volume === 0;
+  button.textContent = muted ? '🔇' : '🔊';
+  button.setAttribute('aria-label', muted ? '恢复视频声音' : '静音视频');
+  button.setAttribute('aria-pressed', String(muted));
+}
+
+function togglePlayerMute() {
+  const video = $('#playerVideo');
+  if (!video) return;
+  video.muted = !(video.muted || video.volume === 0);
+  if (!video.muted && video.volume === 0) video.volume = 1;
+  updateMuteButton();
+  showToast(video.muted ? '视频已静音。' : '视频声音已开启。');
 }
 
 function startPracticeSession() {
@@ -2006,7 +2031,7 @@ function playerFrame(timestamp) {
   recordExpiredTargets(state.lastScoringTime, state.playerTime);
   state.lastScoringTime = state.playerTime;
 
-  if (state.micAllowed && state.micDetector && timestamp - state.micLastSampleAt >= 120) {
+  if (state.micAllowed && state.micDetector && timestamp - state.micLastSampleAt >= 60) {
     state.micLastSampleAt = timestamp;
     try {
       // 模拟模式传入视频时间，让 UserSimulator 按谱面触发；
@@ -2018,31 +2043,37 @@ function playerFrame(timestamp) {
     }
   }
 
-  // 实时匹配：有目标音符、有有效检测、有起音时判定
+  // 实时匹配：起音可用时用它做节奏判定；普通麦克风漏掉起音时，
+  // 首个稳定音高仍可完成该目标的一次判定，避免全程无记录而得 0 分。
   if (state.scoringEnabled && state.playing && state.micAllowed && state.matchingEngine && state.currentNote) {
     const detection = state.lastDetection;
-    const hasPitch = detection?.rms >= 0.005
-      && detection?.pitch?.confidence >= 0.65
+    const hasPitch = detection?.rms >= 0.004
+      && detection?.pitch?.confidence >= 0.45
       && detection.pitch.frequency > 0;
+    const alreadyJudged = state.practiceResults.some(
+      (result) => result.passId === state.scoringPass && result.targetId === state.currentNote.id,
+    );
 
-    if (hasPitch && detection.onset) {
+    if (hasPitch && (detection.onset || !alreadyJudged)) {
       const playedNote = {
         pitch: detection.pitch.frequency,
         rms: detection.rms,
         // 模拟器返回的是「用户实际演奏时间」，比采样时刻更准确；
         // 真实麦克风检测不携带 onsetTime，回退到当前播放时间。
         // 校准偏移补偿输入延迟：检测到的起音比实际弹奏晚 latencyOffset 秒。
-        onsetTime: (Number.isFinite(detection.onsetTime) ? detection.onsetTime : state.playerTime)
-          - state.calibrationOffset,
+        // 没有捕获到瞬态时只能确认音高，不能反推真实起音时刻。
+        // 此时以目标起点作为中性时间，避免把“起音未捕获”误判为节奏错误。
+        onsetTime: detection.onset
+          ? (Number.isFinite(detection.onsetTime) ? detection.onsetTime : state.playerTime) - state.calibrationOffset
+          : state.currentNote.startTime,
       };
       const result = state.matchingEngine.match(state.playerTime, playedNote);
       state.lastResult = result;
 
       // 避免同一音符被重复记录多次
-      const lastResult = state.practiceResults[state.practiceResults.length - 1];
-      const isSameNote = lastResult && lastResult.targetId === state.currentNote.id
-        && lastResult.passId === state.scoringPass
-        && Math.abs(lastResult.videoTime - state.playerTime) < 0.3;
+      const isSameNote = state.practiceResults.some(
+        (record) => record.targetId === state.currentNote.id && record.passId === state.scoringPass,
+      );
 
       if (!isSameNote) {
         const record = {
@@ -3207,6 +3238,9 @@ function handleAction(action, element, payload = {}) {
       else if (payload.play === false && state.playing) pausePlayer();
       else togglePlayer();
       break;
+    case 'toggle-mute':
+      togglePlayerMute();
+      break;
     case 'toggle-loop': {
       const enabled = payload.enabled !== undefined ? payload.enabled : !state.loopEnabled;
       toggleLoop(enabled);
@@ -3388,6 +3422,7 @@ function initEvents() {
     updateCourseCopy();
     updatePlayerUI();
   });
+  playerVideo?.addEventListener('volumechange', updateMuteButton);
   playerVideo?.addEventListener('ended', () => {
     if (state.loopEnabled) {
       const range = getLoopRange();
