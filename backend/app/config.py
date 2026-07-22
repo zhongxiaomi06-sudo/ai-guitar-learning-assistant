@@ -33,6 +33,20 @@ class Settings(BaseSettings):
     minio_bucket: str = "guitar"
     minio_secure: bool = False
 
+    # Baidu Speech Recognition (short speech API)
+    # Get credentials from https://ai.baidu.com/tech/speech
+    baidu_speech_app_id: str = ""
+    baidu_speech_api_key: str = ""
+    baidu_speech_secret_key: str = ""
+    baidu_speech_dev_pid: int = 1537  # 1537 = Mandarin, 1737 = English
+
+    # LLM used for natural-language command parsing. OpenAI-compatible endpoints
+    # are supported (Baidu Qianfan, DeepSeek, Zhipu, OpenAI, etc.).
+    llm_api_base: str = "https://api.openai.com/v1"
+    llm_api_key: str = ""
+    llm_model: str = "gpt-4o-mini"
+    llm_temperature: float = 0.0
+
     @field_validator("debug", mode="before")
     @classmethod
     def normalize_debug_value(cls, value):

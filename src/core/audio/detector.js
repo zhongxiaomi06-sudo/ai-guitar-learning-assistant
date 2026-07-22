@@ -20,6 +20,8 @@ export class GuitarDetector {
     this.stream = null;
     this.isListening = false;
     this.prevRms = 0;
+    // onset 阈值（RMS），可由麦克风校准器根据环境噪声自适应调整。
+    this.onsetThreshold = 0.02;
   }
 
   /**
@@ -132,7 +134,7 @@ export class GuitarDetector {
       };
     }
 
-    const detection = this.analyzer.analyzeFrame(0.02, this.prevRms);
+    const detection = this.analyzer.analyzeFrame(this.onsetThreshold, this.prevRms);
     const rms = Number.isFinite(detection.rms) ? detection.rms : 0;
     this.prevRms = rms;
 

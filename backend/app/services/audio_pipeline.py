@@ -18,7 +18,7 @@ from app.services.score_quality import validate_score_quality
 from app.services.storage import StorageService, get_storage
 from app.services.tab_solver import solve_notes
 from app.services.tempo import estimate_tempo
-from app.services.transcription import extract_audio, get_video_duration, transcribe_audio
+from app.services.transcription import extract_audio, get_av_offset, get_video_duration, transcribe_audio
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -161,6 +161,17 @@ class AudioPipeline:
                 key=key,
                 solved_notes=solved_notes,
             )
+
+            # Detect audio-vs-video start offset (encoder delay, edit lists) so
+            # the timeline can map audio-derived note times onto the video clock.
+            # Failures are non-fatal: the offset defaults to 0 and playback stays
+            # aligned by assuming audio time == video time.
+            try:
+                av_offset = get_av_offset(video_path)
+            except Exception:
+                av_offset = 0.0
+            if av_offset:
+                score["avOffset"] = float(av_offset)
 
             usable, reason = validate_score_quality(score)
             if not usable:

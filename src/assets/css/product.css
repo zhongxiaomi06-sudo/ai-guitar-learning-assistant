@@ -2223,6 +2223,30 @@ a:focus-visible {
   background: var(--color-warning);
 }
 
+.tab-event.is-correct {
+  color: #fff;
+  border-color: #22c55e;
+  background: #22c55e;
+  box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.18);
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+.tab-event.is-wrong {
+  color: #fff;
+  border-color: #ef4444;
+  background: #ef4444;
+  box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.18);
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+.tab-event.is-miss {
+  color: #fff;
+  border-color: #f97316;
+  background: #f97316;
+  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.15);
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
 .score-playhead {
   position: absolute;
   z-index: 2;
@@ -3872,5 +3896,120 @@ a:focus-visible {
     animation-duration: .01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
+  }
+}
+
+/* Voice control */
+.voice-pill {
+  cursor: pointer;
+  user-select: none;
+}
+
+.voice-pill.is-on {
+  color: var(--color-ink);
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent-soft) 60%, transparent);
+}
+
+.voice-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--color-faint);
+  border-radius: 50%;
+  background: transparent;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.voice-pill.is-on .voice-dot {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+}
+
+.voice-dot.is-recording {
+  border-color: var(--color-error, #e17a52);
+  background: var(--color-accent);
+  animation: voicePulse 1s ease-in-out infinite;
+}
+
+.voice-dot.is-processing {
+  border-color: var(--color-warning);
+  background: var(--color-warning);
+  animation: voiceBlink .6s ease-in-out infinite;
+}
+
+@keyframes voicePulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent) 50%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-accent) 0%, transparent); }
+}
+
+@keyframes voiceBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .3; }
+}
+
+.voice-help-layer {
+  position: fixed;
+  z-index: 400;
+  inset: 0;
+}
+
+.voice-help-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 100%);
+  padding: 36px;
+  overflow-y: auto;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-float);
+  animation: drawerIn 240ms var(--ease) both;
+}
+
+.voice-help-drawer > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.voice-help-drawer h2 {
+  margin-top: 7px;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.voice-help-drawer > p {
+  margin: 24px 0 20px;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.voice-help-list {
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 13px;
+  line-height: 2;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 520px) {
+  .voice-help-drawer {
+    padding: 28px 22px;
+  }
+
+  .voice-help-drawer h2 {
+    font-size: 29px;
   }
 }

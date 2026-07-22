@@ -1142,7 +1142,7 @@ PassCriteria {
 
 1. **前端技术栈**：保留 Vite + 原生 JavaScript，未来可视情况升级到 React/Next.js。
 2. **后端服务**：采用 FastAPI + Python 3.11，数据库默认 SQLite（本地开发），生产可切换 PostgreSQL；存储默认本地文件系统，生产可切换 MinIO/S3。
-3. **前端过渡策略**：当前以 `index.html` → `src/product-app.js` 的艺术化单页为默认入口；`src/assets/js/*`、`src/pages/*` 以及五面板相关模块仍在仓库中，待真实数据链路稳定后再决定整合或清理。
+3. **前端入口策略**：当前以 `index.html` → `src/product-app.js` 的艺术化单页为唯一默认入口；旧过渡模块已清理，后续功能直接在该入口上迭代。详见 `docs/p0-gaps.md` 中的剩余缺口清单。
 
 ### 未决
 
@@ -1155,6 +1155,9 @@ PassCriteria {
 
 - `PROJECT.md`：本文件，产品需求总纲。
 - `PROGRESS.md`：项目进度与任务拆分。
+- `p0-gaps.md`：当前 P0 关键缺口清单与修复顺序。
+- `midi-user-simulation.md`：无实机情况下的 MIDI 用户模拟验证流程。
+- `voice-control-build.md`：语音控制功能架构文档（百度 ASR + LLM 命令解析）。
 - `BACKEND_START.md`：后端起步与阶段划分。
 - `../TECHNICAL_RESEARCH.md`：技术栈调研与 AI pipeline 架构。
 - `AUDIO_TO_TAB_PIPELINE.md`：音频 → 六线谱具体实现步骤。
@@ -1165,6 +1168,6 @@ PassCriteria {
 ## 18. 下一步
 
 1. 将后端谱面数据真正驱动音游模式，替换随机音符。
-2. 整合 `src/product-app.js`、`src/app.js` 与 `src/ui-demo.js`，让默认艺术化入口承接真实数据和音频能力。
+2. 在 `src/product-app.js` 上承接真实时间轴、音频匹配和自适应练习能力，完成默认艺术化入口的数据闭环。
 3. 实现视频-谱面时间轴对齐与播放光标同步。
 4. 开始实现 P0 路演闭环：视频导入 → 谱面加载 → 对齐 → 五面板跟练 → 实时检测 → 纠错 → 恢复速度 → 完成页。

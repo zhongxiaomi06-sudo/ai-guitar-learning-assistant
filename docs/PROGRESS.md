@@ -7,6 +7,9 @@
 ## 相关文档
 
 - `PROJECT.md`：项目完整产品文档，包含产品细节、数据模型、验收标准与实施计划。
+- `p0-gaps.md`：当前 P0 关键缺口清单与修复顺序。
+- `midi-user-simulation.md`：无实机情况下的 MIDI 用户模拟验证流程。
+- `voice-control-build.md`：语音控制功能架构文档（百度 ASR + LLM 命令解析）。
 - `BACKEND_START.md`：后端最小可行起步方案。
 - `../TECHNICAL_RESEARCH.md`：完整技术栈调研与 AI pipeline 架构。
 - `AUDIO_TO_TAB_PIPELINE.md`：音频 → 六线谱具体实现步骤。
@@ -20,7 +23,7 @@
 
 **基础构建工具**：Vite（前端）、Uvicorn（后端）。
 
-**最近更新**：2026-07-22 — 合并 agent/merge-audit-fixes 分支，保留后端 P0 服务，吸收媒体边界加固、CORS 与开发端口配置、上传后 course 字段回填等改进；修复合并冲突与测试用例；153 后端测试 + 15 前端测试全部通过。
+**最近更新**：2026-07-22 — 完成 P0 缺口 1–8：前端默认入口接入后端时间轴/片段/练习结果；实时匹配引擎接入播放循环并自动触发专项纠错；`FocusStateMachine` 驱动观看→倒数→聆听→分析→升降速/通过状态机；纠错提示按错误类型生成、对比卡用真实前后数据；后端 `get_av_offset` 检测 A/V 偏移并区分 `videoTime`/`audioTime`；`MicCalibrator` 做环境噪声自适应阈值与输入延迟补偿；`timeline.py` 增加横按/保留指/换把提示并驱动前端双手特写。新增 52 前端测试 + 161 后端测试（2 个 `soundfile` 缺失导致的环境性失败除外）。
 
 ## 项目定位
 
@@ -48,9 +51,6 @@ guitar/
 ├── public/                  # 静态资源
 ├── src/
 │   ├── product-app.js       # 当前艺术化单页入口
-│   ├── main.js              # 过渡期五面板入口，未被默认 HTML 引用
-│   ├── home.js              # 过渡期课程 API 页面逻辑
-│   ├── app.js               # 五面板应用壳
 │   ├── assets/              # 样式、图片、字体
 │   │   ├── css/
 │   │   └── images/
@@ -105,6 +105,15 @@ guitar/
 - [x] 练习薄弱小节聚合：`GET /api/v1/practice/weak-spots/{course_id}`
 - [x] 练习片段状态持久化：`POST /api/v1/courses/{id}/segments/{segment_id}/progress`
 - [x] 149 后端测试 + 15 前端测试全部通过
+- [x] 语音控制功能：前端推按式录音（MediaRecorder）+ 后端百度 ASR 转写 + DeepSeek LLM 命令解析 + fallback 关键词匹配
+- [x] 前端默认入口接入真实后端时间轴（`p0-gaps` 缺口 1）
+- [x] 实时匹配引擎接入播放循环并自动触发专项纠错（缺口 2）
+- [x] 练习结果提交 + 课程库用 summary/weak-spots 驱动进度（缺口 3）
+- [x] 纠错模式按错误类型生成提示、对比卡用真实前后数据、移除硬编码循环（缺口 4）
+- [x] `FocusStateMachine` 显式状态机驱动纠错流转（缺口 8）
+- [x] 后端 A/V 偏移检测，`videoTime`/`audioTime` 分离，前端按视频时钟定位（缺口 6）
+- [x] `MicCalibrator` 环境噪声自适应阈值 + 输入延迟补偿 + 设备告警（缺口 7）
+- [x] `timeline.py` 横按/保留指/换把提示，前端 `renderHandStack` 实时刷新双手特写（缺口 5）
 
 ## 待办（P0/P1/P2 优先级）
 
@@ -132,22 +141,24 @@ guitar/
 - [x] **后端：练习片段状态持久化**
   - 支持 `POST /api/v1/courses/{id}/segments/{segment_id}/progress` 更新状态。
   - 保存 `locked / practicing / passed` 到数据库或课程 `metadata_json`。
-- [ ] **前端：默认入口接入真实后端时间轴**
+- [x] **前端：默认入口接入真实后端时间轴**
   - `product-app.js` 用 `GET /api/v1/courses/{id}/timeline` 驱动跟练音符。
   - 用 `GET /api/v1/courses/{id}/segments` 展示练习片段。
+  - 用 `GET /api/v1/practice/summary` / `weak-spots` 驱动课程库进度。
+- [x] **前端：实时匹配 + 纠错状态机**
+  - `playerFrame` 调用 `MatchingEngine.match`，连续错误自动进入专项纠错。
+  - `FocusStateMachine` 驱动观看→倒数→聆听→分析→升降速/通过，对比卡用真实前后数据。
+- [x] **后端：A/V 对齐 + 麦克风校准 + 手型提示**
+  - `get_av_offset` 检测音视频偏移，`videoTime`/`audioTime` 分离。
+  - `MicCalibrator` 自适应 onset 阈值与输入延迟补偿。
+  - `timeline` 增加横按、保留指、换把提示，前端双手特写实时渲染。
 
 ### P1 — 体验与生产稳定性
 
 - [ ] **后端：用 Celery/Redis 替换 `BackgroundTasks`**
   - 解析任务持久化，服务端重启后可恢复。
-- [ ] **后端：更合理的手型与和弦生成**
-  - `timeline` 中的手型目前只是单音单指，需要真实和弦手型、保留指、换把提示。
 - [ ] **后端：URL 自动下载**
   - 集成 yt-dlp / you-get，但需先明确法律与合规方案。
-- [ ] **前端：实时音高检测与目标谱面对齐**
-  - 用 Web Audio YIN 输出与 timeline 事件比对，给出正确/错音/漏音/节奏偏差。
-- [ ] **前端：自适应调速/循环**
-  - 根据薄弱小节自动降速、拆句、循环，达标后提速。
 
 ### P2 — 更优/未来
 
@@ -159,14 +170,15 @@ guitar/
   - 跨设备保存课程、进度、最佳成绩。
 - [ ] **后端：人工谱面编辑器支持**
   - 修正 pipeline 输出的音高、把位、时间轴。
-- [ ] **工程：清理过渡期前端文件**
-  - 收敛或删除 `src/pages`、`src/assets/js`、`rhythm-demo.html` 等旧实现。
+- [x] **工程：清理过渡期前端文件**
+  - 已删除 `src/pages`、`src/assets/js`、`src/main.js`、`src/home.js`、`src/app.js`、`src/ui-demo.js` 等旧实现；`docs/superpowers/plans` 旧规划文档已清理。当前唯一默认入口为 `index.html` → `src/product-app.js`。
 
 ## 下一步
 
-1. 用户确认并推送前端默认入口与后端时间轴/片段/练习结果 API 的集成。
-2. 运行一次端到端 DEMO 流程：上传 → 解析 → 谱面 → 时间轴 → 跟练 → 错误反馈 → 循环/降速 → 完成页。
-3. 然后处理 P1：生产任务队列、输入视频视觉质量检查、过渡期前端文件收敛。
+1. 端到端验证：上传 → 解析 → 谱面 → 时间轴 → 跟练 → 错误反馈 → 循环/降速 → 完成页（缺口 1–8 已就位）。
+2. 处理 `p0-gaps` 剩余项：缺口 9（精修演示数据指纹命中）、缺口 10（移动端响应式收尾）。
+3. 然后处理 P1：生产任务队列（Celery/Redis）、URL 自动下载的合规方案。
+4. 补充 `soundfile` 依赖以恢复音频质量检查测试。
 
 ## 备注
 

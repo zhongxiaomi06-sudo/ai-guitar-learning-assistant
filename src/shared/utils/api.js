@@ -162,10 +162,30 @@ export const courses = {
   delete: (id) => request(coursePath(id), { method: 'DELETE' }),
   getVideoUrl: (id) => buildUrl(coursePath(id, '/video')),
   getScore: (id) => get(coursePath(id, '/score')),
+  getTimeline: (id) => get(coursePath(id, '/timeline')),
+  getSegments: (id) => get(coursePath(id, '/segments')),
+  updateSegmentProgress: (courseId, segmentId, progress) =>
+    postJSON(coursePath(courseId, `/segments/${encodeURIComponent(segmentId)}/progress`), progress),
   parse: (id) => request(coursePath(id, '/parse'), { method: 'POST' }),
   uploadScore: (id, file) => {
     const form = new FormData();
     form.append('score', file);
     return postForm(coursePath(id, '/score'), form);
   },
+};
+
+export const practice = {
+  createResult: (payload) => postJSON('/api/v1/practice/results', payload),
+  createResults: (payloads) => Promise.all(payloads.map((payload) => postJSON('/api/v1/practice/results', payload))),
+  list: ({ course_id, segment_id, session_id, limit = 100, skip = 0 } = {}) => {
+    const params = new URLSearchParams();
+    if (course_id) params.set('course_id', course_id);
+    if (segment_id) params.set('segment_id', segment_id);
+    if (session_id) params.set('session_id', session_id);
+    params.set('limit', String(limit));
+    params.set('skip', String(skip));
+    return get(`/api/v1/practice/results?${params}`);
+  },
+  summary: (courseId) => get(`/api/v1/practice/summary/${encodeURIComponent(courseId)}`),
+  weakSpots: (courseId) => get(`/api/v1/practice/weak-spots/${encodeURIComponent(courseId)}`),
 };

@@ -6,7 +6,7 @@ FastAPI entry point.
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import courses, practice, score
+from app.api import courses, practice, score, voice
 from app.config import get_settings
 from app.database import Base, engine
 
@@ -38,6 +38,7 @@ app.add_middleware(
 app.include_router(courses.router)
 app.include_router(score.router)
 app.include_router(practice.router)
+app.include_router(voice.router)
 
 
 @app.get("/health")

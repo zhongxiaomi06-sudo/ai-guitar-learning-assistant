@@ -225,6 +225,63 @@ def test_ffprobe_failure_does_not_expose_presigned_url(monkeypatch):
     assert secret not in rendered_traceback
 
 
+def _probe_result(streams_json):
+    """Build a SimpleNamespace mimicking subprocess.run stdout for ffprobe JSON."""
+    return SimpleNamespace(stdout=streams_json)
+
+
+def test_get_av_offset_returns_audio_minus_video_start_time(monkeypatch):
+    payload = '{"streams": [{"codec_type": "video", "start_time": "0.0"}, {"codec_type": "audio", "start_time": "0.04"}]}'
+    monkeypatch.setattr(transcription.subprocess, "run", lambda *a, **k: _probe_result(payload))
+
+    offset = transcription.get_av_offset("video.mp4")
+    assert abs(offset - 0.04) < 1e-9
+
+
+def test_get_av_offset_defaults_to_zero_when_audio_has_no_start_time(monkeypatch):
+    payload = '{"streams": [{"codec_type": "video", "start_time": "0.0"}, {"codec_type": "audio"}]}'
+    monkeypatch.setattr(transcription.subprocess, "run", lambda *a, **k: _probe_result(payload))
+
+    assert transcription.get_av_offset("video.mp4") == 0.0
+
+
+def test_get_av_offset_defaults_to_zero_when_no_audio_stream(monkeypatch):
+    payload = '{"streams": [{"codec_type": "video", "start_time": "0.0"}]}'
+    monkeypatch.setattr(transcription.subprocess, "run", lambda *a, **k: _probe_result(payload))
+
+    assert transcription.get_av_offset("video.mp4") == 0.0
+
+
+def test_get_av_offset_subtracts_video_start_to_normalize_to_browser_clock(monkeypatch):
+    # Video stream starts at 0.1, audio at 0.14 → relative offset 0.04
+    payload = '{"streams": [{"codec_type": "video", "start_time": "0.1"}, {"codec_type": "audio", "start_time": "0.14"}]}'
+    monkeypatch.setattr(transcription.subprocess, "run", lambda *a, **k: _probe_result(payload))
+
+    assert abs(transcription.get_av_offset("video.mp4") - 0.04) < 1e-9
+
+
+def test_get_av_offset_clamps_negative_offset_to_zero(monkeypatch):
+    # Audio starts before video (rare) → clamp to 0 rather than shifting notes earlier
+    payload = '{"streams": [{"codec_type": "video", "start_time": "0.1"}, {"codec_type": "audio", "start_time": "0.05"}]}'
+    monkeypatch.setattr(transcription.subprocess, "run", lambda *a, **k: _probe_result(payload))
+
+    assert transcription.get_av_offset("video.mp4") == 0.0
+
+
+def test_get_av_offset_returns_zero_when_ffprobe_fails(monkeypatch):
+    def fail(command, **kwargs):
+        raise subprocess.CalledProcessError(1, command, stderr="probe failed")
+
+    monkeypatch.setattr(transcription.subprocess, "run", fail)
+
+    assert transcription.get_av_offset("video.mp4") == 0.0
+
+
+def test_get_av_offset_returns_zero_on_malformed_json(monkeypatch):
+    monkeypatch.setattr(transcription.subprocess, "run", lambda *a, **k: _probe_result("not-json"))
+    assert transcription.get_av_offset("video.mp4") == 0.0
+
+
 def test_extract_audio_replaces_destination_only_after_success(monkeypatch, tmp_path):
     destination = tmp_path / "analysis.wav"
     destination.write_bytes(b"old")

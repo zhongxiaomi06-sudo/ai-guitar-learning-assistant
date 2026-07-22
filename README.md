@@ -36,7 +36,6 @@
 | 音频处理 | FFmpeg + Basic Pitch（后端转谱）/ Web Audio API（前端 YIN） |
 | 部署 | Docker Compose（可选） |
 
-> **过渡期说明**：仓库保留了艺术化单页与较早的五面板实现。构建时以 `index.html` → `src/product-app.js` 为准；`src/main.js`、`src/home.js`、`src/app.js` 与 `src/ui-demo.js` 作为后端和音频能力的过渡实现保留，后续会择优整合，而不是假定它们已经成为默认页面入口。
 
 ---
 
@@ -44,7 +43,7 @@
 
 ```
 .
-├── docs/                      # 产品、技术、进度文档
+├── docs/                      # 产品、技术、进度与测试方案文档
 ├── backend/                   # FastAPI 后端与音频转谱流水线
 │   ├── app/
 │   │   ├── main.py            # API 入口
@@ -53,6 +52,7 @@
 │   │   ├── schemas/           # Pydantic 模型
 │   │   ├── services/          # 存储、转录、弦品求解与谱面构建
 │   │   └── tasks/             # 进程内后台解析任务（MVP）
+│   ├── scripts/               # 本地演示与辅助脚本
 │   ├── docker-compose.yml     # PostgreSQL + Redis + MinIO
 │   ├── Dockerfile
 │   └── requirements.txt
@@ -60,8 +60,7 @@
 │   ├── product-app.js         # 当前艺术化单页入口
 │   ├── shared/utils/api.js    # 后端 API 客户端
 │   ├── core/                  # 音频、视频、谱面、匹配与练习模块
-│   ├── assets/css/product.css # 当前产品视觉样式
-│   └── main.js 等             # 过渡期五面板实现，尚未作为默认入口
+│   └── assets/css/            # 当前产品视觉样式
 ├── index.html                 # 默认单页入口
 ├── home.html                  # 兼容入口，重定向到 index.html#/home
 └── vite.config.js
@@ -195,22 +194,27 @@ http://localhost:5173/?course=bcf4b374c965#/home
 
 ## 后续计划
 
-1. 将谱面数据真正驱动音游模式（当前音符仍为随机生成）。
-2. 实现音频 Onset 检测与视频-谱面对齐。
-3. 完善麦克风实时音高检测与和弦识别。
-4. 将匹配反馈从演示模式接入真实音频比对。
-5. 实现自适应调速、A/B 循环、错误回看。
-6. 将进程内解析任务迁移到持久队列，并补齐人工校谱与合规视频抓取。
+详见 `docs/p0-gaps.md`。当前最优先补齐的闭环：
+
+1. 用后端 `timeline` 和 `segments` 驱动跟练页音符与片段。
+2. 将 `MatchingEngine` 接入播放循环，实现实时判定与错误反馈。
+3. 提交练习结果并驱动课程库进度、薄弱小节、前后对比。
+4. 实现基于真实错误的自动专项纠错、降速循环、达标提速。
+5. 补齐和弦/换把手型、音频-视频时间对齐、麦克风延迟校准。
+6. 用 `docs/midi-user-simulation.md` 中的 MIDI 模拟流程在无实机情况下验证上述闭环。
 
 ---
 
 ## 项目文档
 
 - 完整产品文档：`docs/PROJECT.md`
+- P0 关键缺口清单：`docs/p0-gaps.md`
 - 后端起步方案：`docs/BACKEND_START.md`
 - 技术栈调研：`TECHNICAL_RESEARCH.md`
 - 音频转谱流水线：`docs/AUDIO_TO_TAB_PIPELINE.md`
 - 项目进度：`docs/PROGRESS.md`
+- 无实机 MIDI 用户模拟流程：`docs/midi-user-simulation.md`
+- 语音控制功能构建方案：`docs/voice-control-build.md`
 
 ---
 

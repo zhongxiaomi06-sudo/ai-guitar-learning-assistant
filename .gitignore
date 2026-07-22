@@ -29,6 +29,16 @@ Thumbs.db
 *.tmp
 *.temp
 
+# Cache
+.pytest_cache/
+backend/.pytest_cache/
+.codex-build-check/
+.codex-ssh-askpass.cmd
+
+# Large media files in project root
+/*.mp4
+/*.mov
+
 # Backend
 backend/.venv/
 backend/__pycache__/

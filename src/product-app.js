@@ -4,8 +4,16 @@
  */
 
 import { GuitarDetector } from './core/audio/detector.js';
-import { midiToNoteName } from './shared/utils/index.js';
-import { ApiError, courses } from './shared/utils/api.js';
+import { MicCalibrator, estimateLatency, classifyEnvironment } from './core/audio/calibrator.js';
+import { MatchingEngine } from './core/matching/engine.js';
+import { FocusStateMachine, SpeedAction, summarizeAttempt } from './core/practice/stateMachine.js';
+import { UserSimulator } from './core/practice/simulator.js';
+import { ScoreModel } from './core/score/model.js';
+import { TimelineModel } from './core/score/timelineModel.js';
+import { VoiceController } from './core/voice/controller.js';
+import { VOICE_HELP_TEXT } from './core/voice/commands.js';
+import { midiToNoteName, freqToMidi } from './shared/utils/index.js';
+import { ApiError, courses, practice } from './shared/utils/api.js';
 
 const ROUTES = new Set(['home', 'analysis', 'overview', 'player', 'focus', 'results', 'library']);
 const MAX_FILE_SIZE = 1024 * 1024 * 1024;
@@ -35,6 +43,28 @@ const state = {
   remoteVideoUrl: null,
   remoteCourse: null,
   score: null,
+  timeline: [],
+  segments: [],
+  currentSegment: null,
+  scoreModel: null,
+  matchingEngine: null,
+  practiceResults: [],
+  practiceSummaries: {},
+  lastResult: null,
+  currentNote: null,
+  sessionId: null,
+  focusMode: false,
+  focusEvent: null,
+  focusErrorType: 'default',
+  focusFsm: null,
+  focusLoopStart: 0,
+  focusLoopEnd: 0,
+  focusSpeedIndex: 0,
+  focusConsecutiveCorrect: 0,
+  focusStage: 'idle',
+  focusAttempts: 0,
+  focusResults: [],
+  focusLoopCount: 0,
   defaultTabEvents: [],
   backendAvailable: null,
   backendCourses: [],
@@ -53,10 +83,14 @@ const state = {
   micStream: null,
   micContext: null,
   micDetector: null,
+  micCalibrator: null,
+  calibrationOffset: 0,
   micLastSampleAt: 0,
   lastDetection: null,
   micRequestId: 0,
   pendingView: null,
+  simMode: null,
+  simulator: null,
   playing: false,
   playerTime: 0,
   playerSpeed: 1,
@@ -65,6 +99,10 @@ const state = {
   lastFrameAt: 0,
   toastTimer: null,
   lastFocused: null,
+  voiceEnabled: false,
+  voiceRecording: false,
+  voiceProcessing: false,
+  voiceWakeWord: false,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -76,6 +114,8 @@ function loadPreferences() {
     if (saved.theme === 'dark') document.documentElement.dataset.theme = 'dark';
     if (saved.courseTitle) state.courseTitle = saved.courseTitle;
     if (Number.isFinite(saved.playerTime)) state.playerTime = Math.min(saved.playerTime, DEMO_DURATION);
+    if (typeof saved.voiceEnabled === 'boolean') state.voiceEnabled = saved.voiceEnabled;
+    if (typeof saved.voiceWakeWord === 'boolean') state.voiceWakeWord = saved.voiceWakeWord;
   } catch {
     // 不可用的本地状态不应阻断产品页面。
   }
@@ -87,6 +127,8 @@ function savePreferences() {
       theme: document.documentElement.dataset.theme || 'light',
       courseTitle: state.courseTitle,
       playerTime: state.playerTime,
+      voiceEnabled: state.voiceEnabled,
+      voiceWakeWord: state.voiceWakeWord,
     }));
   } catch {
     // 隐私模式可能禁用 localStorage，界面仍可正常使用。
@@ -146,7 +188,14 @@ function activateView(view) {
     window.setTimeout(beginAnalysis, 120);
   }
   if (view !== 'player') pausePlayer();
-  if (view === 'player') updatePlayerUI();
+  if (view === 'player') {
+    if (state.focusMode) exitFocusMode();
+    updatePlayerUI();
+  }
+  if (view === 'results') {
+    if (state.remoteCourse?.id) loadPracticeSummary(state.remoteCourse.id);
+    else if (state.practiceResults.length > 0) loadPracticeSummary('');
+  }
 
   window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   $('#mainContent')?.focus({ preventScroll: true });
@@ -391,6 +440,27 @@ function normalizeTimeSignature(value) {
   return typeof value === 'string' && /^\d+\/\d+$/.test(value) ? value : '4/4';
 }
 
+function timelineEvents(timeline) {
+  if (!Array.isArray(timeline)) return [];
+  return timeline
+    .filter((event) => event.type === 'note' || event.type === 'chord')
+    .map((event) => ({
+      id: event.id,
+      // 谱面音符的点击跳转与高亮都基于视频时间轴，优先使用 videoTime。
+      startTime: Number(event.videoTime ?? event.startTime ?? 0),
+      stringNumber: Number(event.string),
+      fret: Number(event.fret),
+      pitch: Number(event.pitch),
+      measureIndex: Number(event.measureIndex ?? 0),
+      beatPosition: Number(event.beatPosition ?? 0),
+      chord: event.chord,
+      leftHandShape: event.leftHandShape,
+      rightHandShape: event.rightHandShape,
+      tolerance: Number(event.tolerance ?? 0.08),
+    }))
+    .filter((event) => Number.isFinite(event.startTime) && event.startTime >= 0 && Number.isInteger(event.stringNumber) && event.stringNumber >= 1 && event.stringNumber <= 6 && Number.isInteger(event.fret) && event.fret >= 0 && event.fret <= 36);
+}
+
 function scoreEvents(score) {
   const events = [];
   const addNotes = (notes, fallbackTime = 0) => {
@@ -403,7 +473,7 @@ function scoreEvents(score) {
         const fret = Number(position?.fret ?? note?.fret);
         if (!Number.isFinite(startTime) || startTime < 0 || !Number.isInteger(stringNumber) || stringNumber < 1 || stringNumber > 6) return;
         if (!Number.isInteger(fret) || fret < 0 || fret > 36) return;
-        events.push({ startTime, stringNumber, fret });
+        events.push({ id: note?.id || `note-${startTime}-${stringNumber}-${fret}`, startTime, stringNumber, fret });
       });
     });
   };
@@ -418,16 +488,21 @@ function scoreEvents(score) {
   return events.sort((left, right) => left.startTime - right.startTime);
 }
 
-function restoreDefaultScoreEvents() {
-  const tablature = $('[data-tablature]');
-  const playhead = $('[data-score-playhead]');
-  if (!tablature || !state.defaultTabEvents.length) return;
-  $$('.tab-event', tablature).forEach((event) => event.remove());
-  state.defaultTabEvents.forEach((event) => tablature.insertBefore(event.cloneNode(true), playhead));
+function renderTimeline() {
+  const events = timelineEvents(state.timeline).slice(0, 128);
+  renderTabEvents(events);
 }
 
 function renderScore(score) {
+  if (state.timeline.length > 0) {
+    renderTimeline();
+    return;
+  }
   const events = scoreEvents(score).slice(0, 48);
+  renderTabEvents(events);
+}
+
+function renderTabEvents(events) {
   if (!events.length) return;
   const tablature = $('[data-tablature]');
   const playhead = $('[data-score-playhead]');
@@ -440,12 +515,21 @@ function renderScore(score) {
     button.className = 'tab-event';
     button.type = 'button';
     button.dataset.seek = String(event.startTime);
+    if (event.id) button.dataset.eventId = String(event.id);
     button.style.setProperty('--x', `${Math.max(3, Math.min(96, event.startTime / duration * 100)).toFixed(2)}%`);
     button.style.setProperty('--y', String(event.stringNumber));
     button.textContent = String(event.fret);
     button.setAttribute('aria-label', `${event.stringNumber} 弦 ${event.fret} 品，${formatTime(event.startTime, true)}`);
     tablature.insertBefore(button, playhead);
   });
+}
+
+function restoreDefaultScoreEvents() {
+  const tablature = $('[data-tablature]');
+  const playhead = $('[data-score-playhead]');
+  if (!tablature || !state.defaultTabEvents.length) return;
+  $$('.tab-event', tablature).forEach((event) => event.remove());
+  state.defaultTabEvents.forEach((event) => tablature.insertBefore(event.cloneNode(true), playhead));
 }
 
 function applyScore(score) {
@@ -470,7 +554,43 @@ function applyScore(score) {
     state.duration = scoreDuration;
   }
   renderScore(score);
+  rebuildMatchingEngine();
   updateCourseCopy();
+}
+
+function rebuildMatchingEngine() {
+  let model = null;
+  if (state.timeline.length > 0) {
+    model = new TimelineModel(state.timeline);
+  } else if (state.score && Array.isArray(state.score.bars)) {
+    model = new ScoreModel(state.score);
+  }
+  if (model) {
+    state.scoreModel = model;
+    state.matchingEngine = new MatchingEngine(model);
+  } else {
+    state.scoreModel = null;
+    state.matchingEngine = null;
+  }
+  buildSimulator();
+}
+
+/**
+ * 在 ?sim=<mode> 模式下，用当前谱面/时间轴构建一个 UserSimulator，
+ * 直接替换 state.micDetector，跳过真实麦克风流程。
+ * 谱面未就绪时不报错，等 applyScore / 时间轴加载后再次调用即可。
+ */
+function buildSimulator() {
+  if (!state.simMode) return;
+  const events = state.scoreModel?.notes?.length
+    ? state.scoreModel.notes
+    : state.timeline;
+  const simulator = new UserSimulator(events, state.simMode);
+  state.simulator = simulator;
+  state.micDetector = simulator;
+  state.micResolved = true;
+  state.micAllowed = true;
+  updateMicrophoneUI();
 }
 
 async function activateRemoteCourse(course, loadId = ++state.courseLoadId) {
@@ -478,6 +598,12 @@ async function activateRemoteCourse(course, loadId = ++state.courseLoadId) {
   if (loadId !== state.courseLoadId) return false;
   clearCoursePolling();
   resetAnalysis();
+  resetPracticeResults();
+  state.timeline = [];
+  state.segments = [];
+  state.currentSegment = null;
+  state.scoreModel = null;
+  state.matchingEngine = null;
   state.file = null;
   state.videoValidationId += 1;
   state.videoValidationPending = false;
@@ -515,6 +641,28 @@ async function activateRemoteCourse(course, loadId = ++state.courseLoadId) {
       if (loadId === state.courseLoadId && state.remoteCourse?.id === course.id) {
         showToast('课程视频已载入，但谱面暂时不可用。', 'error');
       }
+    }
+  }
+
+  // 获取统一时间轴和练习片段；失败时不阻断，仍可继续用 score 兜底。
+  if (course.score_path) {
+    try {
+      const [timeline, segments] = await Promise.all([
+        courses.getTimeline(course.id),
+        courses.getSegments(course.id),
+      ]);
+      if (loadId !== state.courseLoadId || state.remoteCourse?.id !== course.id) return false;
+      if (Array.isArray(timeline) && timeline.length > 0) {
+        state.timeline = timeline;
+        renderTimeline();
+      }
+      if (Array.isArray(segments) && segments.length > 0) {
+        state.segments = segments;
+        state.currentSegment = segments[0] || null;
+      }
+      rebuildMatchingEngine();
+    } catch {
+      // 后端时间轴不可用，继续用 score 渲染
     }
   }
   return loadId === state.courseLoadId;
@@ -563,9 +711,29 @@ function createCourseCard(course, index) {
   const progressCopy = document.createElement('div');
   progressCopy.className = 'progress-copy';
   const progressLabel = document.createElement('span');
-  progressLabel.textContent = course.status === 'ready' ? '课程已准备' : '后端处理进度';
   const progressValue = document.createElement('strong');
-  const progress = Math.max(0, Math.min(100, Number(course.progress) || 0));
+  const button = document.createElement('button');
+  button.className = 'secondary-button full-width';
+  button.type = 'button';
+  button.dataset.action = 'open-course';
+  button.dataset.courseId = course.id;
+  // 已解析完成的课程优先展示真实练习进度（正确率），否则回退到解析进度
+  const summary = state.practiceSummaries?.[course.id];
+  let progress;
+  if (course.status === 'ready' && summary && Number(summary.total) > 0) {
+    const accuracy = Math.max(0, Math.min(1, Number(summary.accuracy) || 0));
+    progress = Math.round(accuracy * 100);
+    progressLabel.textContent = `已练习 ${summary.total} 次 · 正确率`;
+    button.textContent = '继续练习 →';
+  } else if (course.status === 'ready') {
+    progress = 100;
+    progressLabel.textContent = summary && Number(summary.total) === 0 ? '尚未开始练习' : '课程已准备';
+    button.textContent = '查看课程 →';
+  } else {
+    progress = Math.max(0, Math.min(100, Number(course.progress) || 0));
+    progressLabel.textContent = '后端处理进度';
+    button.textContent = '查看解析状态 →';
+  }
   progressValue.textContent = `${progress}%`;
   progressCopy.append(progressLabel, progressValue);
   const progressBar = document.createElement('div');
@@ -573,12 +741,6 @@ function createCourseCard(course, index) {
   const progressFill = document.createElement('i');
   progressFill.style.setProperty('--value', `${progress}%`);
   progressBar.append(progressFill);
-  const button = document.createElement('button');
-  button.className = 'secondary-button full-width';
-  button.type = 'button';
-  button.dataset.action = 'open-course';
-  button.dataset.courseId = course.id;
-  button.textContent = course.status === 'ready' ? '查看课程 →' : '查看解析状态 →';
   body.append(meta, title, details, progressCopy, progressBar, button);
   article.append(art, body);
   return article;
@@ -624,11 +786,36 @@ async function refreshBackendCourses() {
     state.backendAvailable = true;
     state.backendCourses = Array.isArray(result) ? result : [];
     renderBackendCourses();
+    // 已解析完成的课程后台拉取练习 summary，用于驱动卡片真实进度
+    void loadPracticeSummaries();
     return state.backendCourses;
   } catch {
     state.backendAvailable = false;
     return [];
   }
+}
+
+async function loadPracticeSummaries() {
+  const readyCourses = state.backendCourses.filter((course) => course.status === 'ready' && course.id);
+  if (!readyCourses.length) return;
+  const entries = await Promise.all(
+    readyCourses.map(async (course) => {
+      try {
+        const summary = await practice.summary(course.id);
+        return [course.id, summary];
+      } catch {
+        // 后端不可用或无练习记录时静默回退到解析进度
+        return [course.id, null];
+      }
+    }),
+  );
+  const summaries = {};
+  for (const [id, summary] of entries) {
+    if (id && summary) summaries[id] = summary;
+  }
+  state.practiceSummaries = summaries;
+  // 仅在用户仍停留在课程库时刷新，避免覆盖其他视图
+  if (state.view === 'library') renderBackendCourses();
 }
 
 async function openRemoteCourse(courseId) {
@@ -1026,6 +1213,33 @@ async function allowMicrophone() {
         });
       }, { once: true });
     });
+
+    // 麦克风校准：监听约 3 秒环境噪声，自适应 onset 阈值并估计输入延迟。
+    // 校准失败不应阻断麦克风使用，沿用默认阈值与零延迟补偿。
+    const calibrator = new MicCalibrator(detector.analyzer);
+    try {
+      const env = await calibrator.measureEnvironment(3000, (p) => {
+        button.textContent = `正在检测环境噪声… ${Math.round(p * 100)}%`;
+      });
+      detector.onsetThreshold = env.threshold;
+      calibrator.setLatency(estimateLatency(audioContext));
+      state.micCalibrator = calibrator;
+      state.calibrationOffset = calibrator.latencyOffset;
+      const assessment = classifyEnvironment({
+        noiseFloor: env.noiseFloor,
+        guitarRms: env.guitarRms,
+        latencyOffset: calibrator.latencyOffset,
+      });
+      if (assessment.level === 'ok') {
+        showToast(`麦克风已校准 · 预计延迟 ${Math.round(calibrator.latencyOffset * 1000)} ms`);
+      } else {
+        assessment.warnings.forEach((w) => showToast(w, 'error'));
+      }
+    } catch {
+      state.micCalibrator = null;
+      state.calibrationOffset = 0;
+    }
+
     state.micResolved = true;
     state.micAllowed = true;
     updateMicrophoneUI();
@@ -1057,12 +1271,22 @@ async function allowMicrophone() {
 
 async function stopMicrophone(updateUI = true, invalidateRequest = true) {
   if (invalidateRequest) state.micRequestId += 1;
+  // 模拟模式不持有硬件资源，只切换状态；保留 simMode/simulator 以便重新开启。
+  if (state.simMode) {
+    state.micDetector = null;
+    state.lastDetection = null;
+    state.micAllowed = false;
+    if (updateUI) updateMicrophoneUI();
+    return;
+  }
   const detector = state.micDetector;
   const stream = state.micStream;
   const context = state.micContext;
   state.micDetector = null;
   state.micStream = null;
   state.micContext = null;
+  state.micCalibrator = null;
+  state.calibrationOffset = 0;
   state.lastDetection = null;
   state.micAllowed = false;
   detector?.stop();
@@ -1090,16 +1314,35 @@ function skipMicrophone() {
 }
 
 function updateMicrophoneUI() {
-  const label = state.micAllowed ? '麦克风已连接' : (state.micResolved ? '仅观看模式' : '麦克风未开启');
+  let label;
+  if (state.simMode && state.micAllowed) {
+    label = `模拟 · ${state.simulator?.modeLabel || state.simMode}`;
+  } else if (state.micAllowed) {
+    label = '麦克风已连接';
+  } else if (state.micResolved) {
+    label = state.simMode ? '模拟已暂停' : '仅观看模式';
+  } else {
+    label = '麦克风未开启';
+  }
   $$('[data-mic-label]').forEach((element) => {
     element.textContent = label;
   });
   $('#productShell').classList.toggle('mic-active', state.micAllowed);
+  $('#productShell').classList.toggle('sim-active', Boolean(state.simMode));
   $$('.live-mic').forEach((element) => element.classList.toggle('is-active', state.micAllowed));
   $('.settings-foot')?.classList.toggle('is-active', state.micAllowed);
 }
 
 function requestPractice() {
+  if (state.simMode) {
+    if (!state.simulator) buildSimulator();
+    if (!state.matchingEngine) {
+      showToast('模拟模式需要已加载的谱面课程，请先选择或上传视频。', 'error');
+      return;
+    }
+    navigate('player');
+    return;
+  }
   if (state.micResolved) navigate('player');
   else openMicModal('player');
 }
@@ -1113,6 +1356,7 @@ function playPlayer() {
   const video = $('#playerVideo');
   state.playing = true;
   state.lastFrameAt = performance.now();
+  startPracticeSession();
   if ((state.videoUrl || state.remoteVideoUrl) && video) {
     video.currentTime = Math.min(state.playerTime, video.duration || state.duration);
     video.playbackRate = state.playerSpeed;
@@ -1135,6 +1379,130 @@ function pausePlayer() {
   updatePlayerUI();
 }
 
+function startPracticeSession() {
+  if (state.sessionId && state.practiceResults.length > 0) return;
+  state.sessionId = `sess_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+  state.practiceResults = [];
+  state.lastResult = null;
+  // 模拟模式：每段新练习重新触发所有音符
+  state.simulator?.reset();
+}
+
+function resetPracticeResults() {
+  state.sessionId = null;
+  state.practiceResults = [];
+  state.lastResult = null;
+}
+
+function buildPracticePayloads() {
+  const courseId = state.remoteCourse?.id;
+  if (!courseId || !state.sessionId || state.practiceResults.length === 0) return [];
+
+  const segmentId = state.currentSegment?.id;
+  return state.practiceResults.map((result) => ({
+    course_id: courseId,
+    segment_id: segmentId || undefined,
+    session_id: state.sessionId,
+    target_event_id: result.targetId || undefined,
+    detected_pitch: Number.isFinite(result.detectedPitch) ? result.detectedPitch : null,
+    detected_time: Number.isFinite(result.videoTime) ? result.videoTime : null,
+    result_type: result.resultType || 'miss',
+    timing_offset: Number.isFinite(result.timingOffsetMs) ? result.timingOffsetMs / 1000 : 0,
+    confidence: result.pitchDeviation !== undefined ? Math.max(0, 1 - Math.abs(result.pitchDeviation) / 100) : 0,
+    error_type: result.type === 'wrong-pitch' ? 'pitch' : result.type === 'miss' ? 'miss' : undefined,
+    metadata_json: {},
+  }));
+}
+
+async function submitPracticeResults() {
+  const payloads = buildPracticePayloads();
+  if (!payloads.length) return;
+  try {
+    await practice.createResults(payloads);
+    showToast(`已保存 ${payloads.length} 条练习记录`);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 0) {
+      showToast('后端未连接，练习记录暂存本地。', 'error');
+    } else {
+      showToast('练习记录保存失败。', 'error');
+    }
+  }
+}
+
+async function loadPracticeSummary(courseId) {
+  let summary = null;
+  let weakSpots = null;
+
+  if (courseId) {
+    try {
+      [, weakSpots] = await Promise.all([
+        practice.summary(courseId),
+        practice.weakSpots(courseId),
+      ]);
+    } catch {
+      // 后端不可用，使用本地结果计算
+    }
+  }
+
+  const localResults = state.practiceResults;
+  const total = localResults.length;
+  const correct = localResults.filter((r) => r.resultType === 'correct' || r.score === 'perfect' || r.score === 'good').length;
+  const wrong = localResults.filter((r) => r.resultType === 'wrong-pitch').length;
+  const miss = localResults.filter((r) => r.resultType === 'miss').length;
+  const timing = localResults.filter((r) => Math.abs(r.timingOffsetMs || 0) > 100).length;
+
+  const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+  const chordCompleteness = total > 0 ? Math.round(((correct + (total - wrong - miss)) / total) * 100) : 0;
+  const timingScore = total > 0 ? Math.max(0, 100 - Math.round((timing / total) * 100)) : 0;
+  const totalScore = Math.round((accuracy * 0.5 + chordCompleteness * 0.3 + timingScore * 0.2));
+
+  const accuracyEl = $('[data-accuracy]');
+  const accuracyBarEl = $('[data-accuracy-bar]');
+  const accuracyLabelEl = $('[data-accuracy-label]');
+  const chordEl = $('[data-chord-completeness]');
+  const chordBarEl = $('[data-chord-bar]');
+  const chordLabelEl = $('[data-chord-label]');
+  const timingEl = $('[data-timing]');
+  const timingBarEl = $('[data-timing-bar]');
+  const timingLabelEl = $('[data-timing-label]');
+  const totalScoreEl = $('[data-total-score]');
+  const scoreRingEl = $('[data-score-ring]');
+  const scoreDeltaEl = $('[data-score-delta]');
+  const subtitleEl = $('[data-results-subtitle]');
+
+  if (accuracyEl) accuracyEl.textContent = `${accuracy}%`;
+  if (accuracyBarEl) accuracyBarEl.style.setProperty('--value', `${accuracy}%`);
+  if (accuracyLabelEl) accuracyLabelEl.textContent = accuracy >= 90 ? '关键音符已达标' : accuracy >= 70 ? '大部分音符正确' : '需要继续练习';
+
+  if (chordEl) chordEl.textContent = `${chordCompleteness}%`;
+  if (chordBarEl) chordBarEl.style.setProperty('--value', `${chordCompleteness}%`);
+  if (chordLabelEl) chordLabelEl.textContent = chordCompleteness >= 85 ? '和弦完整度良好' : '注意保持和弦音';
+
+  if (timingEl) timingEl.textContent = `${timingScore}%`;
+  if (timingBarEl) timingBarEl.style.setProperty('--value', `${timingScore}%`);
+  if (timingLabelEl) timingLabelEl.textContent = timing === 0 ? '节奏稳定' : `有 ${timing} 处明显节奏偏差`;
+
+  if (totalScoreEl) totalScoreEl.textContent = String(totalScore);
+  if (scoreRingEl) scoreRingEl.style.setProperty('--score', String(totalScore));
+  if (scoreDeltaEl) scoreDeltaEl.textContent = '--';
+  if (subtitleEl) subtitleEl.textContent = `本次练习共 ${total} 个判定事件，得分 ${totalScore}。`;
+
+  renderMasteryMap(weakSpots, summary);
+}
+
+function renderMasteryMap(weakSpots, _summary) {
+  const container = $('[data-mastery-map]');
+  if (!container) return;
+  if (!Array.isArray(weakSpots) || weakSpots.length === 0) {
+    container.innerHTML = '<article><span>--</span><strong>暂无数据</strong><i></i></article>';
+    return;
+  }
+  container.innerHTML = weakSpots.map((spot) => {
+    const status = spot.severity >= 0.7 ? '' : (spot.severity >= 0.3 ? 'is-learning' : 'is-mastered');
+    return `<article class="${status}"><span>${spot.measureRange || '?'}</span><strong>${status === 'is-mastered' ? '已掌握' : status === 'is-learning' ? '基本掌握' : '需练习'}</strong><i></i></article>`;
+  }).join('');
+}
+
 function playerFrame(timestamp) {
   if (!state.playing) return;
   const video = $('#playerVideo');
@@ -1146,18 +1514,91 @@ function playerFrame(timestamp) {
   }
   state.lastFrameAt = timestamp;
 
+  state.currentNote = state.scoreModel ? state.scoreModel.getNoteAtTime(state.playerTime) : null;
+
   if (state.micAllowed && state.micDetector && timestamp - state.micLastSampleAt >= 120) {
     state.micLastSampleAt = timestamp;
     try {
-      state.lastDetection = state.micDetector.getDetection();
+      // 模拟模式传入视频时间，让 UserSimulator 按谱面触发；
+      // 真实 GuitarDetector.getDetection 忽略该参数。
+      state.lastDetection = state.micDetector.getDetection(state.playerTime);
     } catch {
       void stopMicrophone();
       showToast('麦克风连接已中断，请重新开启。', 'error');
     }
   }
 
-  if (state.loopEnabled && state.playerTime >= Math.min(28, state.duration)) {
-    seekPlayer(Math.min(17.42, state.duration - 1));
+  // 实时匹配：有目标音符、有有效检测、有起音时判定
+  if (state.playing && state.micAllowed && state.matchingEngine && state.currentNote) {
+    const detection = state.lastDetection;
+    const hasPitch = detection?.rms >= 0.005
+      && detection?.pitch?.confidence >= 0.65
+      && detection.pitch.frequency > 0;
+
+    if (hasPitch && detection.onset) {
+      const playedNote = {
+        pitch: detection.pitch.frequency,
+        rms: detection.rms,
+        // 模拟器返回的是「用户实际演奏时间」，比采样时刻更准确；
+        // 真实麦克风检测不携带 onsetTime，回退到当前播放时间。
+        // 校准偏移补偿输入延迟：检测到的起音比实际弹奏晚 latencyOffset 秒。
+        onsetTime: (Number.isFinite(detection.onsetTime) ? detection.onsetTime : state.playerTime)
+          - state.calibrationOffset,
+      };
+      const result = state.matchingEngine.match(state.playerTime, playedNote);
+      state.lastResult = result;
+
+      // 避免同一音符被重复记录多次
+      const lastResult = state.practiceResults[state.practiceResults.length - 1];
+      const isSameNote = lastResult && lastResult.targetId === state.currentNote.id
+        && Math.abs(lastResult.videoTime - state.playerTime) < 0.3;
+
+      if (!isSameNote) {
+        const record = {
+          targetId: state.currentNote.id,
+          detectedPitch: freqToMidi(detection.pitch.frequency),
+          detectedFreq: detection.pitch.frequency,
+          timingOffsetMs: result.timingDeviation,
+          pitchDeviation: result.pitchDeviation,
+          resultType: result.type,
+          score: result.score,
+          videoTime: state.playerTime,
+          targetTime: state.currentNote.startTime,
+        };
+        state.practiceResults.push(record);
+        if (state.focusMode) state.focusResults.push(record);
+
+        // 自动进入专项纠错：连续 3 次同音符错误
+        if (!state.focusMode && state.autoSlowDown !== false) {
+          const recent = state.practiceResults.slice(-3);
+          const sameTarget = recent.every((r) => r.targetId === state.currentNote.id);
+          const allErrors = recent.every((r) => r.resultType !== 'correct');
+          if (recent.length >= 3 && sameTarget && allErrors) {
+            enterFocusMode(state.currentNote, recent[recent.length - 1].resultType);
+          }
+        }
+      }
+    }
+  }
+
+  // 纠错模式：在循环范围内自动回跳
+  if (state.focusMode && state.loopEnabled && state.playerTime >= state.focusLoopEnd) {
+    state.focusLoopCount += 1;
+    if (state.focusLoopCount >= 2) {
+      pausePlayer();
+      evaluateFocusAttempt();
+      state.focusLoopCount = 0;
+    } else {
+      seekPlayer(state.focusLoopStart);
+    }
+  }
+
+  // 非纠错循环：在当前练习片段范围内回跳，不再使用写死的演示区间
+  if (state.loopEnabled && !state.focusMode) {
+    const range = getLoopRange();
+    if (state.playerTime >= range.end && range.end > range.start) {
+      seekPlayer(range.start);
+    }
   }
   if (state.playerTime >= state.duration) {
     state.playerTime = state.duration;
@@ -1170,7 +1611,12 @@ function playerFrame(timestamp) {
 }
 
 function seekPlayer(seconds) {
-  state.playerTime = Math.max(0, Math.min(Number(seconds) || 0, state.duration));
+  const target = Math.max(0, Math.min(Number(seconds) || 0, state.duration));
+  // 回跳时重置模拟器，让循环范围内的音符可以重新触发
+  if (state.simulator && target < state.playerTime - 0.1) {
+    state.simulator.reset();
+  }
+  state.playerTime = target;
   const video = $('#playerVideo');
   if ((state.videoUrl || state.remoteVideoUrl) && video && Number.isFinite(video.duration)) {
     video.currentTime = Math.min(state.playerTime, video.duration);
@@ -1185,6 +1631,75 @@ function setPlayerSpeed(speed) {
   if (video) video.playbackRate = state.playerSpeed;
   $$('[data-speed]').forEach((button) => button.classList.toggle('is-active', Number(button.dataset.speed) === state.playerSpeed));
   showToast(`播放速度已调整为 ${Math.round(state.playerSpeed * 100)}%`);
+}
+
+function getCurrentSegmentStart() {
+  if (state.currentSegment && Number.isFinite(state.currentSegment.startTime)) {
+    return state.currentSegment.startTime;
+  }
+  return 0;
+}
+
+const FINGER_NAMES = { 0: '空弦', 1: '食指', 2: '中指', 3: '无名指', 4: '小指' };
+const PICK_NAMES = { P: '拇指', i: '食指', m: '中指', a: '无名指' };
+
+/**
+ * 用当前目标音符的左右手手型数据更新双手特写面板。
+ * 时间轴事件未携带手型（如仅 score 兜底）时保留静态示例文案。
+ */
+function renderHandStack() {
+  const note = state.currentNote;
+  const left = note?.leftHandShape;
+  const right = note?.rightHandShape;
+
+  const leftConf = $('[data-left-confidence]');
+  const leftFingers = $('[data-left-fingers]');
+  const leftNext = $('[data-left-next]');
+
+  if (left && Array.isArray(left.fingerPositions) && left.fingerPositions.length) {
+    if (leftConf) leftConf.textContent = '94%';
+    if (leftFingers) {
+      const fretted = left.fingerPositions.filter((p) => p.finger > 0);
+      const labels = (fretted.length ? fretted : left.fingerPositions).map(
+        (p) => `${FINGER_NAMES[p.finger] || `${p.finger} 指`} · ${p.string} 弦 ${p.fret} 品`,
+      );
+      leftFingers.replaceChildren(...labels.map((text) => {
+        const span = document.createElement('span');
+        span.textContent = text;
+        return span;
+      }));
+    }
+    if (leftNext) {
+      const shift = left.nextShift;
+      let text = '保持当前手型';
+      if (shift) {
+        if (shift.direction === 'up') text = `下一动作：向第 ${shift.targetFret} 品换把`;
+        else if (shift.direction === 'down') text = `下一动作：回第 ${shift.targetFret} 品`;
+        else if (shift.direction === 'stay') text = '下一动作：保持把位';
+      }
+      const barre = left.barreRange;
+      if (barre) text = `横按 ${barre.stringStart}–${barre.stringEnd} 弦 ${barre.fret} 品 · ${text}`;
+      leftNext.textContent = text;
+    }
+  }
+
+  const rightConf = $('[data-right-confidence]');
+  const rightDir = $('[data-right-direction]');
+  const rightFinger = $('[data-right-finger]');
+  const rightDetail = $('[data-right-detail]');
+  const rightNext = $('[data-right-next]');
+
+  if (right) {
+    if (rightConf) rightConf.textContent = '91%';
+    const isDown = right.direction === 'down';
+    const arrow = isDown ? '↓' : '↑';
+    if (rightDir) rightDir.textContent = arrow;
+    const fingerKey = right.finger || 'i';
+    if (rightFinger) rightFinger.textContent = `${fingerKey} · ${PICK_NAMES[fingerKey] || fingerKey}`;
+    const strings = Array.isArray(right.strings) ? right.strings : [];
+    if (rightDetail) rightDetail.textContent = `${isDown ? '下拨' : '上拨'} ${strings.length ? strings.join('/') : ''} 弦`;
+    if (rightNext) rightNext.textContent = '跟随节拍继续';
+  }
 }
 
 function updatePlayerUI() {
@@ -1222,9 +1737,17 @@ function updatePlayerUI() {
       nearestDistance = distance;
     }
     note.classList.toggle('is-done', noteTime < state.playerTime - 1.5);
-    note.classList.remove('is-current');
+    note.classList.remove('is-current', 'is-correct', 'is-wrong', 'is-miss');
   });
-  if (nearest) nearest.classList.add('is-current');
+  if (nearest) {
+    nearest.classList.add('is-current');
+    if (state.lastResult && state.lastResult.targetNote && nearest.dataset.eventId === state.lastResult.targetNote.id) {
+      nearest.classList.add(
+        state.lastResult.type === 'correct' ? 'is-correct' :
+        state.lastResult.type === 'miss' ? 'is-miss' : 'is-wrong'
+      );
+    }
+  }
 
   const title = $('[data-feedback-title]');
   const copy = $('[data-feedback-copy]');
@@ -1234,10 +1757,32 @@ function updatePlayerUI() {
     && detection?.rms >= 0.005
     && detection.pitch?.confidence >= 0.65
     && detection.pitch.frequency > 0;
+  const currentNote = state.currentNote;
+  const lastResult = state.lastResult;
+  const resultFresh = lastResult && Math.abs(state.playerTime - lastResult.currentTime) < 1.2;
+
   if (!state.playing) {
     title.textContent = state.playerTime > 0 ? '已暂停' : '准备就绪';
     copy.textContent = state.playerTime > 0 ? '可点击谱面音符精确定位。' : '点击播放，跟随老师开始演奏。';
     score.textContent = '--';
+  } else if (resultFresh && currentNote) {
+    const targetName = currentNote.type === 'chord'
+      ? (currentNote.chord || '和弦')
+      : midiToNoteName(currentNote.midi);
+    if (lastResult.type === 'correct') {
+      title.textContent = '完美';
+      copy.textContent = `目标：${targetName}`;
+    } else if (lastResult.type === 'miss') {
+      title.textContent = '漏音 / 节奏偏';
+      copy.textContent = `目标：${targetName} · ${Math.abs(lastResult.timingDeviation).toFixed(0)} ms`;
+    } else if (lastResult.type === 'wrong-pitch') {
+      title.textContent = '音高偏差';
+      copy.textContent = `目标：${targetName} · 听到 ${midiToNoteName(freqToMidi(lastResult.playedNote.pitch))}`;
+    } else {
+      title.textContent = '未命中';
+      copy.textContent = `目标：${targetName}`;
+    }
+    score.textContent = lastResult.score === 'perfect' ? 'Perfect' : (lastResult.score === 'good' ? 'Good' : 'Miss');
   } else if (hasPitch) {
     const noteName = midiToNoteName(detection.pitch.midi);
     title.textContent = `识别到 ${noteName}`;
@@ -1245,31 +1790,290 @@ function updatePlayerUI() {
     score.textContent = noteName;
   } else if (state.micAllowed) {
     title.textContent = '正在聆听';
-    copy.textContent = '请弹响一个清晰的单音，系统会显示实时音高。';
-    score.textContent = '--';
+    copy.textContent = currentNote
+      ? `当前目标：${midiToNoteName(currentNote.midi)}`
+      : '请弹响一个清晰的单音，系统会显示实时音高。';
+    score.textContent = currentNote ? midiToNoteName(currentNote.midi) : '--';
   } else {
     title.textContent = '跟随播放';
     copy.textContent = '仅观看模式不会生成演奏判定；开启麦克风可查看实时音高。';
     score.textContent = '--';
   }
+
+  renderHandStack();
 }
 
-function toggleLoop() {
-  state.loopEnabled = !state.loopEnabled;
-  $('[data-seek-track]').classList.toggle('is-looping', state.loopEnabled);
-  showToast(state.loopEnabled ? 'A/B 循环已开启：17.42–28.00 秒' : 'A/B 循环已关闭');
+function toggleLoop(force) {
+  const enabled = force !== undefined ? force : !state.loopEnabled;
+  state.loopEnabled = enabled;
+  $('[data-seek-track]')?.classList.toggle('is-looping', state.loopEnabled);
+  if (!state.loopEnabled) {
+    showToast('循环已关闭');
+    return;
+  }
+  const range = getLoopRange();
+  const label = state.focusMode ? '专项循环' : '片段循环';
+  showToast(`${label}已开启：${formatTime(range.start, true)}–${formatTime(range.end, true)}`);
+}
+
+function showVoiceHelp() {
+  const help = $('[data-voice-help]');
+  if (help) {
+    const body = $('p', help);
+    if (body) body.textContent = VOICE_HELP_TEXT;
+    openLayer(help);
+  }
+}
+
+function updateVoiceUI() {
+  const pill = $('[data-voice-pill]');
+  const dot = $('[data-voice-dot]');
+  if (pill) {
+    pill.classList.toggle('is-on', state.voiceEnabled);
+    pill.setAttribute('aria-pressed', String(state.voiceEnabled));
+  }
+  if (dot) {
+    dot.classList.toggle('is-recording', state.voiceRecording);
+    dot.classList.toggle('is-processing', state.voiceProcessing);
+  }
+  const switchButton = $('[data-action="toggle-voice"]');
+  if (switchButton) {
+    switchButton.classList.toggle('is-on', state.voiceEnabled);
+    switchButton.setAttribute('aria-checked', String(state.voiceEnabled));
+  }
+  const wakeSwitch = $('[data-action="toggle-wake-word"]');
+  if (wakeSwitch) {
+    wakeSwitch.classList.toggle('is-on', state.voiceWakeWord);
+    wakeSwitch.setAttribute('aria-checked', String(state.voiceWakeWord));
+  }
+}
+
+function toggleVoiceControl(element) {
+  if (!VoiceController.isSupported()) {
+    showToast('当前浏览器不支持语音控制', 'error');
+    return;
+  }
+  const on = !state.voiceEnabled;
+  state.voiceEnabled = on;
+  if (element) toggleSwitch(element);
+  updateVoiceUI();
+  savePreferences();
+  showToast(on ? '语音控制已开启，按住语音按钮说话' : '语音控制已关闭');
+}
+
+function toggleWakeWord(element) {
+  state.voiceWakeWord = !state.voiceWakeWord;
+  if (element) toggleSwitch(element);
+  updateVoiceUI();
+  savePreferences();
+  showToast(state.voiceWakeWord ? '唤醒词模式已开启' : '唤醒词模式已关闭');
+}
+
+let voiceController = null;
+
+function initVoiceControl() {
+  if (!VoiceController.isSupported()) return;
+
+  voiceController = new VoiceController({
+    dispatcher(action, payload) {
+      handleAction(action, null, payload);
+    },
+    onStateChange(stateName, detail) {
+      if (stateName === 'recording') {
+        state.voiceRecording = true;
+        state.voiceProcessing = false;
+        showToast('正在聆听…');
+      } else if (stateName === 'processing') {
+        state.voiceRecording = false;
+        state.voiceProcessing = true;
+      } else if (stateName === 'idle') {
+        state.voiceRecording = false;
+        state.voiceProcessing = false;
+      } else if (stateName === 'error') {
+        state.voiceRecording = false;
+        state.voiceProcessing = false;
+        showToast(detail || '语音处理失败', 'error');
+      } else if (stateName === 'unrecognized') {
+        showToast(detail ? `未识别："${detail}"` : '未识别语音命令');
+      } else if (stateName === 'executed') {
+        if (detail?.reply) showToast(detail.reply);
+      }
+      updateVoiceUI();
+    },
+  });
+}
+
+function startVoiceRecording() {
+  if (!state.voiceEnabled) return;
+  voiceController?.start();
+}
+
+function stopVoiceRecording() {
+  voiceController?.stop();
 }
 
 function frameStep(direction) {
   seekPlayer(state.playerTime + direction / 30);
 }
 
+const FOCUS_SPEEDS = [0.6, 0.75, 0.9, 1.0];
+const FOCUS_REQUIRED_CORRECT = 2;
+
+/**
+ * 错误类型 → 专项练习提示映射。
+ * 每项给出简短标题（用于 data-focus-tip）与详细文案（用于 data-focus-tip-detail）。
+ * detail 是函数，可读取错误事件的真实弦/品/和弦信息。
+ */
+const FOCUS_TIPS = {
+  'wrong-pitch': {
+    short: '按准落点',
+    title: '音高偏差',
+    detail: (event) => `目标 ${event.chord || midiToNoteName(event.midi)}：按准 ${event.string} 弦 ${event.fret} 品，听到正确音高再继续。`,
+  },
+  'miss': {
+    short: '听清再走',
+    title: '漏音 / 节奏偏',
+    detail: (event) => `注意 ${event.string} 弦是否清晰发声；若被消音，检查左手是否误触琴弦。`,
+  },
+  'extra': {
+    short: '只弹目标',
+    title: '多弹了音',
+    detail: (event) => `此段只弹 ${event.chord || midiToNoteName(event.midi)}，避免多弹相邻琴弦。`,
+  },
+  default: {
+    short: '慢动作练习',
+    title: '专注这个动作',
+    detail: (event) => `注意 ${event.string} 弦 ${event.fret} 品的按法，跟随老师慢动作练习。`,
+  },
+};
+
+function focusTipFor(errorType) {
+  return FOCUS_TIPS[errorType] || FOCUS_TIPS.default;
+}
+
+/**
+ * 计算一段练习结果的可比较指标（百分比）。
+ * @param {{ correct?: number, errors?: number, total?: number, timingErrors?: number, accuracy?: number } | null} stats
+ * @returns {{ accuracy: number, chord: number, timing: number }}
+ */
+function metricsFromStats(stats) {
+  const total = Number(stats?.total) || 0;
+  const correct = Number(stats?.correct) || 0;
+  const errors = Number(stats?.errors) || 0;
+  const timingErrors = Number(stats?.timingErrors) || 0;
+  const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+  const chord = total > 0 ? Math.round(((total - errors) / total) * 100) : 0;
+  const timing = total > 0 ? Math.max(0, 100 - Math.round((timingErrors / total) * 100)) : 0;
+  return { accuracy, chord, timing };
+}
+
+/**
+ * 返回当前可用循环范围。
+ * 纠错模式用 focusLoopStart/End；否则用当前练习片段；都没有则覆盖整段。
+ */
+function getLoopRange() {
+  if (state.focusMode) {
+    return { start: state.focusLoopStart, end: state.focusLoopEnd };
+  }
+  const seg = state.currentSegment;
+  if (seg && Number.isFinite(seg.startTime) && Number.isFinite(seg.endTime)) {
+    return { start: seg.startTime, end: Math.min(seg.endTime, state.duration) };
+  }
+  return { start: 0, end: state.duration };
+}
+
+function enterFocusMode(errorEvent, errorType) {
+  if (!errorEvent || state.focusMode) return;
+  state.focusMode = true;
+  state.focusEvent = errorEvent;
+  state.focusErrorType = errorType || state.lastResult?.type || 'default';
+
+  // 循环范围：错误前 1 小节 + 错误小节 + 错误后 1 小节
+  const beatsPerBar = Number.parseInt(String(state.timeSignature || '4/4').split('/')[0] || '4', 10) || 4;
+  const measureDuration = state.bpm ? (60 / state.bpm) * beatsPerBar : 2;
+  const measureIndex = errorEvent.measureIndex || 1;
+  state.focusLoopStart = Math.max(0, (measureIndex - 2) * measureDuration);
+  state.focusLoopEnd = Math.min(state.duration, (measureIndex + 1) * measureDuration);
+
+  state.focusResults = [];
+  state.focusLoopCount = 0;
+
+  // 快照进入纠错前的指标，用于后续前后对比
+  const beforeResults = state.practiceResults.filter(
+    (r) => r.videoTime >= state.focusLoopStart && r.videoTime <= state.focusLoopEnd,
+  );
+  const beforeStats = summarizeAttempt(
+    beforeResults.map((r) => ({ resultType: r.resultType, timingOffsetMs: r.timingOffsetMs })),
+  );
+
+  state.focusFsm = new FocusStateMachine({
+    speeds: FOCUS_SPEEDS,
+    requiredCorrect: FOCUS_REQUIRED_CORRECT,
+  });
+  state.focusFsm.enter(beforeStats);
+
+  renderFocusView();
+  pausePlayer();
+  navigate('focus');
+  showToast('检测到连续错误，进入专项练习');
+}
+
+function renderFocusView() {
+  const event = state.focusEvent;
+  const fsm = state.focusFsm;
+  if (!event || !fsm) return;
+
+  const measureIndex = event.measureIndex || 6;
+  const startTime = state.focusLoopStart;
+  const endTime = state.focusLoopEnd;
+  const speedPercent = Math.round(fsm.currentSpeed * 100);
+
+  const subtitle = $('[data-focus-subtitle]');
+  if (subtitle) subtitle.textContent = `第 ${measureIndex} 小节 · 回看循环 ${formatTime(startTime, true)}–${formatTime(endTime, true)}`;
+
+  const speedLabel = $('[data-focus-speed-label]');
+  if (speedLabel) speedLabel.textContent = `老师动作 · ${speedPercent}% 速度`;
+
+  // 提示文案根据错误类型生成，覆盖简短标题与详细说明
+  const tip = focusTipFor(state.focusErrorType);
+  const issueTitle = $('[data-focus-issue-title]');
+  if (issueTitle) issueTitle.textContent = `${event.chord || midiToNoteName(event.midi)} · ${tip.title}`;
+  const tipStrong = $('[data-focus-tip]');
+  if (tipStrong) tipStrong.textContent = tip.short;
+  const tipDetail = $('[data-focus-tip-detail]');
+  if (tipDetail) tipDetail.textContent = tip.detail(event);
+
+  const roundEl = $('[data-focus-round]');
+  if (roundEl) roundEl.textContent = `第 ${Math.min(fsm.attempts + 1, 4)} / 4 轮`;
+
+  const targetEl = $('[data-focus-target]');
+  if (targetEl) targetEl.textContent = `目标：连续正确 ${FOCUS_REQUIRED_CORRECT} 次`;
+
+  // 速度阶梯：已通过 / 练习中 / 待解锁
+  const ladder = $$('[data-speed-ladder] > div');
+  ladder.forEach((step, index) => {
+    const isCurrent = index === fsm.speedStep;
+    step.classList.toggle('is-current', isCurrent);
+    step.classList.toggle('is-done', index < fsm.speedStep);
+    const span = $('span', step);
+    if (span) {
+      if (index < fsm.speedStep) span.textContent = '通过';
+      else if (isCurrent) span.textContent = fsm.isPassed ? '已通过' : '练习中';
+      else span.textContent = fsm.isPassed ? '已通过' : '待解锁';
+    }
+  });
+}
+
 function startFocusAttempt() {
+  const fsm = state.focusFsm;
+  if (!fsm || !fsm.canRetry) return;
+  fsm.startAttempt();
   const countdown = $('[data-countdown]');
   const number = $('span', countdown);
   countdown.hidden = false;
   let count = 3;
   number.textContent = String(count);
+  const measureIndex = state.focusEvent?.measureIndex || 6;
   const interval = window.setInterval(() => {
     count -= 1;
     if (count > 0) {
@@ -1278,22 +2082,92 @@ function startFocusAttempt() {
     }
     if (count === 0) {
       number.textContent = '开始';
-      $('small', countdown).textContent = '弹奏第 6 小节';
+      $('small', countdown).textContent = `弹奏第 ${measureIndex} 小节`;
       return;
     }
     window.clearInterval(interval);
     countdown.hidden = true;
     $('small', countdown).textContent = '准备演奏';
-    const comparison = $('[data-comparison]');
-    comparison.hidden = false;
-    const ladder = $$('.speed-ladder > div');
-    ladder[0].classList.remove('is-current');
-    $('span', ladder[0]).textContent = '通过';
-    ladder[1].classList.add('is-current');
-    $('span', ladder[1]).textContent = '已解锁';
-    comparison.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
-    showToast('目标错误已解决，75% 速度已解锁。');
+    fsm.finishCountIn();
+    // 每轮只统计本轮结果，便于评估与对比
+    state.focusResults = [];
+    state.focusLoopCount = 0;
+    state.loopEnabled = true;
+    state.playerSpeed = fsm.currentSpeed;
+    const video = $('#playerVideo');
+    if (video) video.playbackRate = state.playerSpeed;
+    state.playerTime = state.focusLoopStart;
+    seekPlayer(state.focusLoopStart);
+    playPlayer();
   }, 680);
+}
+
+function evaluateFocusAttempt() {
+  const fsm = state.focusFsm;
+  if (!fsm) return;
+  const results = state.focusResults.filter(
+    (r) => r.videoTime >= state.focusLoopStart && r.videoTime <= state.focusLoopEnd,
+  );
+  fsm.finishLoop(
+    results.map((r) => ({ resultType: r.resultType, timingOffsetMs: r.timingOffsetMs })),
+  );
+
+  const comparison = $('[data-comparison]');
+  const comparisonTitle = $('[data-comparison-title]');
+  const comparisonNext = $('[data-comparison-next]');
+  const comparisonMetrics = $('[data-comparison-metrics]');
+  if (comparison) comparison.hidden = false;
+
+  // 用真实前后指标填充对比卡的三条数值
+  if (comparisonMetrics) {
+    const before = metricsFromStats(fsm.beforeStats);
+    const after = metricsFromStats(fsm.afterStats);
+    const pairs = [
+      [before.accuracy, after.accuracy],
+      [before.chord, after.chord],
+      [before.timing, after.timing],
+    ];
+    $$('span', comparisonMetrics).forEach((span, index) => {
+      const pair = pairs[index];
+      if (!pair) return;
+      const beforeEl = $('b', span);
+      const afterEl = $('strong', span);
+      if (beforeEl) beforeEl.textContent = `${pair[0]}%`;
+      if (afterEl) afterEl.textContent = `${pair[1]}%`;
+    });
+  }
+
+  const action = fsm.lastAction;
+  if (action === SpeedAction.PASSED) {
+    if (comparisonTitle) comparisonTitle.textContent = '这个难点已经通过了！';
+    if (comparisonNext) comparisonNext.textContent = '下一步：回到完整跟练。';
+  } else if (action === SpeedAction.SPEED_UP) {
+    if (comparisonTitle) comparisonTitle.textContent = '这一档速度已经稳定了。';
+    if (comparisonNext) comparisonNext.textContent = `下一步：提到 ${Math.round(fsm.currentSpeed * 100)}% 速度，保持相同动作。`;
+  } else if (action === SpeedAction.SLOW_DOWN) {
+    if (comparisonTitle) comparisonTitle.textContent = '这一档还不够稳定，先回到慢一点的速度。';
+    if (comparisonNext) comparisonNext.textContent = `已降速到 ${Math.round(fsm.currentSpeed * 100)}%，再来一次。`;
+  } else {
+    if (comparisonTitle) comparisonTitle.textContent = '再来一次，注意老师动作。';
+    if (comparisonNext) comparisonNext.textContent = '保持当前速度，专注目标音符。';
+  }
+
+  renderFocusView();
+  comparison?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+}
+
+function exitFocusMode() {
+  state.focusFsm?.exit();
+  state.focusMode = false;
+  state.focusEvent = null;
+  state.focusErrorType = 'default';
+  state.focusFsm = null;
+  state.loopEnabled = false;
+  state.playerSpeed = 1;
+  const video = $('#playerVideo');
+  if (video) video.playbackRate = 1;
+  const comparison = $('[data-comparison]');
+  if (comparison) comparison.hidden = true;
 }
 
 function openLayer(layer) {
@@ -1314,14 +2188,14 @@ function closeLayer(layer, restoreFocus = true) {
     state.pendingView = null;
   }
   layer.hidden = true;
-  if ($('[data-mic-modal]').hidden && $('[data-settings-layer]').hidden) {
+  if ($('[data-mic-modal]').hidden && $('[data-settings-layer]').hidden && $('[data-voice-help]').hidden) {
     document.body.style.overflow = '';
   }
   if (restoreFocus && state.lastFocused instanceof HTMLElement) state.lastFocused.focus();
 }
 
 function activeLayer() {
-  return [$('[data-mic-modal]'), $('[data-settings-layer]')].find((layer) => layer && !layer.hidden) || null;
+  return [$('[data-mic-modal]'), $('[data-settings-layer]'), $('[data-voice-help]')].find((layer) => layer && !layer.hidden) || null;
 }
 
 function trapFocus(event) {
@@ -1362,8 +2236,44 @@ function filterLibrary(filter) {
   });
 }
 
-function handleAction(action, element) {
+function handleAction(action, element, payload = {}) {
   switch (action) {
+    case 'adjust-speed': {
+      const steps = [0.5, 0.6, 0.75, 0.9, 1];
+      const current = state.playerSpeed;
+      const index = steps.indexOf(current);
+      let nextIndex = payload.delta > 0 ? index + 1 : index - 1;
+      nextIndex = Math.max(0, Math.min(steps.length - 1, nextIndex));
+      setPlayerSpeed(steps[nextIndex]);
+      return;
+    }
+    case 'set-speed':
+      setPlayerSpeed(payload.speed);
+      return;
+    case 'seek-to-segment-start': {
+      const segmentStart = getCurrentSegmentStart();
+      seekPlayer(segmentStart);
+      showToast('已回到片段开头');
+      return;
+    }
+    case 'navigate':
+      if (payload.route && ROUTES.has(payload.route)) navigate(payload.route);
+      return;
+    case 'next-segment':
+      showToast('下一片段');
+      return;
+    case 'prev-segment':
+      showToast('上一片段');
+      return;
+    case 'show-voice-help':
+      showVoiceHelp();
+      return;
+    case 'toggle-voice':
+      toggleVoiceControl(element);
+      return;
+    case 'toggle-wake-word':
+      toggleWakeWord(element);
+      return;
     case 'start-analysis':
       startSelectedAnalysis();
       break;
@@ -1399,20 +2309,44 @@ function handleAction(action, element) {
     case 'start-practice':
       requestPractice();
       break;
-    case 'open-focus':
-      seekPlayer(17.42);
-      state.loopEnabled = true;
-      $('[data-seek-track]')?.classList.add('is-looping');
-      navigate('focus');
-      break;
-    case 'open-mic':
-      if (state.micAllowed) {
-        void stopMicrophone();
-        showToast('麦克风已关闭，原始音频不会被保存。');
+    case 'open-focus': {
+      const lastResult = state.lastResult;
+      const errorEvent = lastResult?.targetNote || state.currentNote;
+      if (errorEvent) {
+        enterFocusMode(errorEvent, lastResult?.type);
       } else {
-        openMicModal();
+        // 没有具体错误事件时，跳到当前片段开头并开启循环，而非写死的演示区间
+        const range = getLoopRange();
+        seekPlayer(range.start);
+        state.loopEnabled = true;
+        $('[data-seek-track]')?.classList.add('is-looping');
+        showToast(`已开启片段循环：${formatTime(range.start, true)}–${formatTime(range.end, true)}`);
+        navigate('focus');
       }
       break;
+    }
+    case 'open-mic': {
+      const shouldEnable = payload.enabled !== undefined ? payload.enabled : !state.micAllowed;
+      if (state.simMode) {
+        if (shouldEnable) {
+          buildSimulator();
+          showToast(`已启用模拟演奏：${state.simulator?.modeLabel || state.simMode}`);
+        } else if (state.micAllowed) {
+          state.micAllowed = false;
+          state.micDetector = null;
+          updateMicrophoneUI();
+          showToast('模拟演奏已暂停，可从顶部重新开启。');
+        }
+        return;
+      }
+      if (shouldEnable) {
+        if (!state.micAllowed) openMicModal();
+      } else if (state.micAllowed) {
+        void stopMicrophone();
+        showToast('麦克风已关闭，原始音频不会被保存。');
+      }
+      break;
+    }
     case 'close-mic':
       closeLayer($('[data-mic-modal]'));
       state.pendingView = null;
@@ -1429,16 +2363,26 @@ function handleAction(action, element) {
     case 'close-settings':
       closeLayer($('[data-settings-layer]'));
       break;
+    case 'close-voice-help':
+      closeLayer($('[data-voice-help]'));
+      break;
     case 'toggle-auto-slow':
+      toggleSwitch(element);
+      state.autoSlowDown = element.classList.contains('is-on');
+      break;
     case 'toggle-overlay':
       toggleSwitch(element);
       break;
     case 'toggle-play':
-      togglePlayer();
+      if (payload.play === true && !state.playing) playPlayer();
+      else if (payload.play === false && state.playing) pausePlayer();
+      else togglePlayer();
       break;
-    case 'toggle-loop':
-      toggleLoop();
+    case 'toggle-loop': {
+      const enabled = payload.enabled !== undefined ? payload.enabled : !state.loopEnabled;
+      toggleLoop(enabled);
       break;
+    }
     case 'fullscreen': {
       const pane = $('.teacher-pane');
       if (!document.fullscreenElement && pane?.requestFullscreen) {
@@ -1458,6 +2402,9 @@ function handleAction(action, element) {
       break;
     case 'finish-practice':
       pausePlayer();
+      void submitPracticeResults().then(() => {
+        if (state.remoteCourse?.id) loadPracticeSummary(state.remoteCourse.id);
+      });
       navigate('results');
       break;
     case 'toggle-review':
@@ -1575,14 +2522,20 @@ function initEvents() {
     updatePlayerUI();
   });
   playerVideo?.addEventListener('ended', () => {
-    if (state.loopEnabled && state.duration > 18) {
-      seekPlayer(Math.min(17.42, state.duration - 0.25));
-      playerVideo.play().catch(() => pausePlayer());
-      return;
+    if (state.loopEnabled) {
+      const range = getLoopRange();
+      if (range.end > range.start) {
+        seekPlayer(range.start);
+        playerVideo.play().catch(() => pausePlayer());
+        return;
+      }
     }
     state.playerTime = state.duration;
     pausePlayer();
-    navigate('results');
+    void submitPracticeResults().then(() => {
+      if (state.remoteCourse?.id) loadPracticeSummary(state.remoteCourse.id);
+      navigate('results');
+    });
   });
   playerVideo?.addEventListener('error', () => {
     if (!playerVideo.currentSrc) return;
@@ -1610,20 +2563,53 @@ function initEvents() {
     state.micDetector?.stop();
     state.micStream?.getTracks().forEach((track) => track.stop());
     if (state.micContext?.state !== 'closed') void state.micContext?.close();
+    voiceController?.stop?.();
   });
   window.addEventListener('resize', () => {
     if (state.view === 'player') updatePlayerUI();
   });
+
+  const voicePill = $('[data-voice-pill]');
+  if (voicePill) {
+    const start = (event) => {
+      event.preventDefault();
+      if (!state.voiceEnabled) {
+        toggleVoiceControl();
+      }
+      startVoiceRecording();
+    };
+    const stop = (event) => {
+      event.preventDefault();
+      stopVoiceRecording();
+    };
+    voicePill.addEventListener('mousedown', start);
+    voicePill.addEventListener('touchstart', start);
+    voicePill.addEventListener('mouseup', stop);
+    voicePill.addEventListener('mouseleave', stop);
+    voicePill.addEventListener('touchend', stop);
+  }
 }
 
 function bootstrap() {
   loadPreferences();
+  // ?sim=<mode> 开启 MIDI/程序化用户模拟，替代真实麦克风监听。
+  // 支持 perfect / miss / late50 / late100 / late200 / early50 / early100 /
+  // wrong@<time> / wrong@id=<id> / jitter / partial。
+  const simMode = new URLSearchParams(window.location.search).get('sim');
+  if (simMode) {
+    state.simMode = simMode;
+    state.micResolved = true;
+    state.micAllowed = true;
+    showToast(`已启用模拟演奏模式：${simMode}（无需麦克风）`);
+  }
   state.defaultTabEvents = $$('.tab-event').map((event) => event.cloneNode(true));
   buildWaveforms();
   initUpload();
+  initVoiceControl();
   initEvents();
   updateCourseCopy();
   updateMicrophoneUI();
+  updateVoiceUI();
   setVideoSources();
   chooseTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
   activateView(routeFromHash());

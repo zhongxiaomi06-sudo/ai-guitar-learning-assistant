@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MIDI 用户模拟测试 · 弦间</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel-2: #273449;
+      --border: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --miss: #f97316;
+      --lane: #94a3b8;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 16px 20px 32px;
+    }
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    header .title h1 { font-size: 20px; font-weight: 700; }
+    header .title p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    header .title a { color: var(--accent); }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+    label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+    select, input[type="text"], input[type="number"], button {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    button { cursor: pointer; transition: background .15s, border-color .15s; }
+    button:hover { background: #324158; }
+    button.primary { background: var(--accent); color: #07182a; border-color: var(--accent); font-weight: 700; }
+    button.primary:hover { background: #7dd3fc; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    /* 谱面区域 */
+    .stage { position: relative; height: 240px; overflow: hidden; }
+    .lanes { position: absolute; inset: 24px 0 24px 0; display: flex; flex-direction: column; justify-content: space-between; }
+    .lane {
+      position: relative;
+      height: 1px;
+      background: repeating-linear-gradient(90deg, var(--lane) 0 6px, transparent 6px 12px);
+      opacity: .35;
+    }
+    .lane-label {
+      position: absolute;
+      left: -18px;
+      top: -9px;
+      font-size: 11px;
+      color: var(--muted);
+      width: 14px;
+      text-align: center;
+    }
+    .note {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #0f172a;
+      background: #64748b;
+      border: 2px solid rgba(255,255,255,.25);
+      transition: transform .12s, box-shadow .12s;
+    }
+    .note.is-current { transform: translate(-50%, -50%) scale(1.25); box-shadow: 0 0 0 4px rgba(56,189,248,.35); }
+    .note.is-correct { background: var(--ok); }
+    .note.is-wrong { background: var(--bad); }
+    .note.is-miss { background: var(--miss); }
+    .playhead {
+      position: absolute;
+      top: 0; bottom: 0;
+      width: 2px;
+      background: var(--accent);
+      box-shadow: 0 0 8px rgba(56,189,248,.8);
+      transform: translateX(-1px);
+    }
+
+    /* 反馈区 */
+    .feedback {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr 1fr;
+      gap: 12px;
+    }
+    .feedback .box {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .feedback .box small { color: var(--muted); font-size: 11px; }
+    .feedback .box strong { font-size: 20px; display: block; margin-top: 4px; }
+    .verdict.correct strong { color: var(--ok); }
+    .verdict.wrong-pitch strong { color: var(--bad); }
+    .verdict.miss strong { color: var(--miss); }
+    .verdict.idle strong { color: var(--muted); }
+
+    .stats { display: flex; flex-wrap: wrap; gap: 8px; }
+    .stat { flex: 1; min-width: 90px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+    .stat small { color: var(--muted); font-size: 11px; }
+    .stat strong { font-size: 18px; display: block; margin-top: 2px; }
+    .stat.ok strong { color: var(--ok); }
+    .stat.bad strong { color: var(--bad); }
+    .stat.miss strong { color: var(--miss); }
+
+    .log {
+      max-height: 160px;
+      overflow: auto;
+      font-family: 'SFMono-Regular', Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+    .log .row { display: flex; gap: 10px; }
+    .log .row b { color: var(--text); }
+    .log .row.correct b { color: var(--ok); }
+    .log .row.wrong-pitch b { color: var(--bad); }
+    .log .row.miss b { color: var(--miss); }
+
+    .hint { font-size: 12px; color: var(--muted); line-height: 1.6; }
+    .hint code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; color: var(--text); }
+
+    @media (max-width: 720px) {
+      .feedback { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title">
+      <h1>MIDI 用户模拟测试</h1>
+      <p>无需麦克风：用 <code>UserSimulator</code> 按时间轴生成虚拟演奏，走完匹配与判定链路。<a href="./index.html?sim=perfect">在产品页接入 ?sim=perfect</a></p>
+    </div>
+  </header>
+
+  <section class="panel controls" aria-label="模拟控制">
+    <label>模拟模式
+      <select id="mode">
+        <option value="perfect">perfect · 完美演奏</option>
+        <option value="miss">miss · 全程漏音</option>
+        <option value="late50">late50 · 晚 50 ms</option>
+        <option value="late100">late100 · 晚 100 ms</option>
+        <option value="late200">late200 · 晚 200 ms</option>
+        <option value="early50">early50 · 早 50 ms</option>
+        <option value="early100">early100 · 早 100 ms</option>
+        <option value="jitter">jitter · 节奏抖动</option>
+        <option value="partial">partial · 部分漏音</option>
+        <option value="custom">custom · 自定义 wrong@…</option>
+      </select>
+    </label>
+    <label id="customWrap" hidden>自定义模式
+      <input id="customMode" type="text" value="wrong@3.0" placeholder="wrong@6.2 或 wrong@id=n3">
+    </label>
+    <label>速度
+      <select id="speed">
+        <option value="0.5">50%</option>
+        <option value="0.75">75%</option>
+        <option value="1" selected>100%</option>
+        <option value="1.5">150%</option>
+      </select>
+    </label>
+    <button class="primary" id="play">▶ 播放</button>
+    <button id="reset">↺ 重置</button>
+  </section>
+
+  <section class="panel" aria-label="谱面与时间轴">
+    <div class="stage" id="stage">
+      <div class="lanes" id="lanes"></div>
+      <div class="playhead" id="playhead" style="left:0"></div>
+    </div>
+  </section>
+
+  <section class="panel feedback" aria-live="polite">
+    <div class="box verdict idle" id="verdict">
+      <small>实时判定</small>
+      <strong id="verdictText">准备就绪</strong>
+    </div>
+    <div class="box">
+      <small>当前目标 / 听到</small>
+      <strong id="targetText">--</strong>
+    </div>
+    <div class="box">
+      <small>进度</small>
+      <strong id="progressText">0.00 / 0.00 s</strong>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="统计">
+    <div class="stats">
+      <div class="stat ok"><small>正确</small><strong id="okCount">0</strong></div>
+      <div class="stat bad"><small>错音</small><strong id="badCount">0</strong></div>
+      <div class="stat miss"><small>漏音/节奏</small><strong id="missCount">0</strong></div>
+      <div class="stat"><small>正确率</small><strong id="accuracy">--</strong></div>
+      <div class="stat"><small>已触发音符</small><strong id="firedCount">0</strong></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="判定日志">
+    <div class="log" id="log"></div>
+  </section>
+
+  <p class="hint">
+    该页面用内置 12 音符旋律验证 <code>MatchingEngine</code> 与 <code>UserSimulator</code> 的联动。
+    选择不同模式观察判定结果：<code>perfect</code> 全绿、<code>late200</code> 触发漏音、<code>wrong@3.0</code> 在 3 秒处判错音。
+    也可在产品页直接使用 <code>?sim=&lt;mode&gt;</code> 替换真实麦克风流程。
+  </p>
+
+  <script type="module">
+    import { UserSimulator } from '/src/core/practice/simulator.js';
+    import { MatchingEngine } from '/src/core/matching/engine.js';
+    import { TimelineModel } from '/src/core/score/timelineModel.js';
+    import { midiToFreq, freqToMidi, midiToNoteName } from '/src/shared/utils/index.js';
+
+    // 内置测试旋律：12 个音符，覆盖 6 根弦，约 7.5 秒
+    const TIMELINE = [
+      { id: 'note_01', type: 'note', startTime: 1.0, endTime: 1.45, string: 1, fret: 0, pitch: 64 }, // E4
+      { id: 'note_02', type: 'note', startTime: 1.5, endTime: 1.95, string: 1, fret: 1, pitch: 65 }, // F4
+      { id: 'note_03', type: 'note', startTime: 2.0, endTime: 2.45, string: 1, fret: 3, pitch: 67 }, // G4
+      { id: 'note_04', type: 'note', startTime: 2.5, endTime: 2.95, string: 2, fret: 0, pitch: 59 }, // B3
+      { id: 'note_05', type: 'note', startTime: 3.0, endTime: 3.45, string: 2, fret: 1, pitch: 60 }, // C4
+      { id: 'note_06', type: 'note', startTime: 3.5, endTime: 3.95, string: 3, fret: 0, pitch: 55 }, // G3
+      { id: 'note_07', type: 'note', startTime: 4.0, endTime: 4.45, string: 3, fret: 2, pitch: 57 }, // A3
+      { id: 'note_08', type: 'note', startTime: 4.5, endTime: 4.95, string: 4, fret: 0, pitch: 50 }, // D3
+      { id: 'note_09', type: 'note', startTime: 5.0, endTime: 5.45, string: 4, fret: 2, pitch: 52 }, // E3
+      { id: 'note_10', type: 'note', startTime: 5.5, endTime: 5.95, string: 5, fret: 0, pitch: 45 }, // A2
+      { id: 'note_11', type: 'note', startTime: 6.0, endTime: 6.45, string: 5, fret: 3, pitch: 48 }, // C3
+      { id: 'note_12', type: 'note', startTime: 6.5, endTime: 6.95, string: 6, fret: 0, pitch: 40 }, // E2
+    ];
+    const DURATION = 7.5;
+
+    const STRING_NAMES = ['e', 'B', 'G', 'D', 'A', 'E']; // 1 弦(高音) -> 6 弦(低音)
+
+    const model = new TimelineModel(TIMELINE);
+    const engine = new MatchingEngine(model);
+
+    const els = {
+      mode: document.getElementById('mode'),
+      customWrap: document.getElementById('customWrap'),
+      customMode: document.getElementById('customMode'),
+      speed: document.getElementById('speed'),
+      play: document.getElementById('play'),
+      reset: document.getElementById('reset'),
+      stage: document.getElementById('stage'),
+      lanes: document.getElementById('lanes'),
+      playhead: document.getElementById('playhead'),
+      verdict: document.getElementById('verdict'),
+      verdictText: document.getElementById('verdictText'),
+      targetText: document.getElementById('targetText'),
+      progressText: document.getElementById('progressText'),
+      okCount: document.getElementById('okCount'),
+      badCount: document.getElementById('badCount'),
+      missCount: document.getElementById('missCount'),
+      accuracy: document.getElementById('accuracy'),
+      firedCount: document.getElementById('firedCount'),
+      log: document.getElementById('log'),
+    };
+
+    const noteEls = new Map();
+
+    function buildLanes() {
+      els.lanes.innerHTML = '';
+      // 1 弦在顶部
+      for (let string = 1; string <= 6; string += 1) {
+        const lane = document.createElement('div');
+        lane.className = 'lane';
+        const label = document.createElement('span');
+        label.className = 'lane-label';
+        label.textContent = STRING_NAMES[string - 1];
+        lane.appendChild(label);
+        els.lanes.appendChild(lane);
+      }
+      noteEls.clear();
+      // y 坐标：1 弦顶部 -> 6 弦底部
+      const totalNotes = TIMELINE.length;
+      for (const event of TIMELINE) {
+        const node = document.createElement('div');
+        node.className = 'note';
+        node.textContent = String(event.fret);
+        node.title = `${STRING_NAMES[event.string - 1]} 弦 ${event.fret} 品 @ ${event.startTime.toFixed(2)}s`;
+        const x = (event.startTime / DURATION) * 100;
+        const y = ((6 - event.string) / 5) * 100; // 1 弦 -> 0%, 6 弦 -> 100%
+        node.style.left = `${x}%`;
+        node.style.top = `${y}%`;
+        node.dataset.id = event.id;
+        els.lanes.appendChild(node);
+        noteEls.set(event.id, node);
+      }
+    }
+
+    function currentMode() {
+      if (els.mode.value === 'custom') return els.customMode.value.trim() || 'perfect';
+      return els.mode.value;
+    }
+
+    let sim = new UserSimulator(TIMELINE, currentMode());
+    let playing = false;
+    let virtualTime = 0;
+    let lastFrameAt = 0;
+    let rafId = null;
+    let lastSampleAt = 0;
+    let lastDetection = null;
+    let stats = { correct: 0, wrong: 0, miss: 0, fired: 0 };
+    const SAMPLE_INTERVAL = 60; // ms，比 120ms 更密，便于演示
+
+    function rebuildSim() {
+      sim = new UserSimulator(TIMELINE, currentMode());
+      els.play.textContent = '▶ 播放';
+    }
+
+    function resetRun() {
+      playing = false;
+      cancelAnimationFrame(rafId);
+      rafId = null;
+      virtualTime = 0;
+      lastFrameAt = 0;
+      lastSampleAt = 0;
+      lastDetection = null;
+      stats = { correct: 0, wrong: 0, miss: 0, fired: 0 };
+      sim.reset();
+      noteEls.forEach((node) => node.classList.remove('is-current', 'is-correct', 'is-wrong', 'is-miss'));
+      els.verdict.className = 'box verdict idle';
+      els.verdictText.textContent = '准备就绪';
+      els.targetText.textContent = '--';
+      els.progressText.textContent = `0.00 / ${DURATION.toFixed(2)} s`;
+      updateStats();
+      els.log.innerHTML = '';
+      els.play.textContent = '▶ 播放';
+      movePlayhead(0);
+    }
+
+    function movePlayhead(t) {
+      els.playhead.style.left = `${(t / DURATION) * 100}%`;
+    }
+
+    function updateStats() {
+      els.okCount.textContent = stats.correct;
+      els.badCount.textContent = stats.wrong;
+      els.missCount.textContent = stats.miss;
+      els.firedCount.textContent = stats.fired;
+      const total = stats.correct + stats.wrong + stats.miss;
+      els.accuracy.textContent = total > 0 ? `${Math.round((stats.correct / total) * 100)}%` : '--';
+    }
+
+    function setVerdict(type, text) {
+      const cls = type === 'correct' ? 'correct'
+        : type === 'wrong-pitch' ? 'wrong-pitch'
+        : type === 'miss' ? 'miss'
+        : 'idle';
+      els.verdict.className = `box verdict ${cls}`;
+      els.verdictText.textContent = text;
+    }
+
+    function addLogRow(target, detection, result) {
+      const row = document.createElement('div');
+      const cls = result ? result.type : '';
+      row.className = `row ${cls}`;
+      const targetName = target ? midiToNoteName(target.midi) : '--';
+      const heard = detection.pitch.frequency > 0 ? `${midiToNoteName(freqToMidi(detection.pitch.frequency))} (${detection.pitch.frequency.toFixed(1)}Hz)` : '无声';
+      const verdict = result ? result.type : 'idle';
+      const dev = result ? `${result.timingDeviation.toFixed(0)}ms` : '--';
+      row.innerHTML = `<span>${virtualTime.toFixed(2)}s</span><b>${verdict}</b><span>目标 ${targetName}</span><span>听到 ${heard}</span><span>偏差 ${dev}</span>`;
+      els.log.prepend(row);
+      while (els.log.children.length > 40) els.log.removeChild(els.log.lastChild);
+    }
+
+    function frame(timestamp) {
+      if (!playing) return;
+      if (!lastFrameAt) lastFrameAt = timestamp;
+      const delta = (timestamp - lastFrameAt) / 1000;
+      lastFrameAt = timestamp;
+      virtualTime += delta * Number(els.speed.value);
+
+      if (virtualTime >= DURATION) {
+        virtualTime = DURATION;
+        stop('播放结束');
+      }
+
+      movePlayhead(virtualTime);
+      els.progressText.textContent = `${virtualTime.toFixed(2)} / ${DURATION.toFixed(2)} s`;
+
+      // 高亮当前目标音符
+      const target = model.getNoteAtTime(virtualTime);
+      noteEls.forEach((node, id) => {
+        node.classList.toggle('is-current', Boolean(target && target.id === id));
+      });
+      els.targetText.textContent = target ? `${midiToNoteName(target.midi)} · ${STRING_NAMES[target.string - 1]}弦${target.fret}品` : '--';
+
+      // 采样检测
+      if (timestamp - lastSampleAt >= SAMPLE_INTERVAL) {
+        lastSampleAt = timestamp;
+        lastDetection = sim.getDetection(virtualTime);
+      }
+
+      const detection = lastDetection;
+      const hasPitch = detection && detection.onset
+        && detection.rms >= 0.005
+        && detection.pitch.confidence >= 0.65
+        && detection.pitch.frequency > 0;
+
+      if (hasPitch && target) {
+        const playedNote = {
+          pitch: detection.pitch.frequency,
+          rms: detection.rms,
+          onsetTime: Number.isFinite(detection.onsetTime) ? detection.onsetTime : virtualTime,
+        };
+        const result = engine.match(virtualTime, playedNote);
+        stats.fired += 1;
+        if (result.type === 'correct') { stats.correct += 1; setVerdict('correct', '正确'); }
+        else if (result.type === 'wrong-pitch') { stats.wrong += 1; setVerdict('wrong-pitch', '错音'); }
+        else { stats.miss += 1; setVerdict('miss', result.suggestion || '漏音/节奏'); }
+
+        const node = noteEls.get(target.id);
+        if (node) {
+          node.classList.remove('is-current');
+          node.classList.add(
+            result.type === 'correct' ? 'is-correct'
+            : result.type === 'wrong-pitch' ? 'is-wrong'
+            : 'is-miss'
+          );
+        }
+        addLogRow(target, detection, result);
+        updateStats();
+      } else if (!target) {
+        setVerdict('idle', virtualTime >= DURATION ? '播放结束' : '段间静默');
+      } else {
+        setVerdict('idle', '聆听中…');
+      }
+
+      if (playing) rafId = requestAnimationFrame(frame);
+    }
+
+    function play() {
+      if (playing) { stop('已暂停'); return; }
+      if (virtualTime >= DURATION) resetRun();
+      playing = true;
+      lastFrameAt = 0;
+      els.play.textContent = 'Ⅱ 暂停';
+      rafId = requestAnimationFrame(frame);
+    }
+
+    function stop(reason) {
+      playing = false;
+      cancelAnimationFrame(rafId);
+      rafId = null;
+      els.play.textContent = '▶ 播放';
+      if (reason) setVerdict('idle', reason);
+    }
+
+    els.play.addEventListener('click', play);
+    els.reset.addEventListener('click', resetRun);
+    els.mode.addEventListener('change', () => {
+      els.customWrap.hidden = els.mode.value !== 'custom';
+      resetRun();
+      rebuildSim();
+    });
+    els.customMode.addEventListener('change', () => { resetRun(); rebuildSim(); });
+    els.speed.addEventListener('change', () => {});
+
+    buildLanes();
+    resetRun();
+  </script>
+</body>
+</html>

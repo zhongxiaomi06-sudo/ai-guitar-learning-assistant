@@ -174,6 +174,64 @@ def get_video_duration(video_path: str) -> float:
     return duration
 
 
+def get_av_offset(video_path: str) -> float:
+    """Return the audio-vs-video start offset in seconds.
+
+    The offset is ``audio_stream.start_time - video_stream.start_time``. A
+    non-zero value typically indicates encoder delay or an MP4 edit list that
+    shifts audio relative to video. The browser's HTML5 ``currentTime`` is
+    0-based on the video stream, so the offset is added to audio-derived note
+    times when mapping them onto the video timeline.
+
+    Returns ``0.0`` when ffprobe is unavailable, no audio stream exists, or
+    the streams lack ``start_time`` metadata — playback then stays aligned by
+    default rather than guessing from ambiguous data.
+    """
+    command = [
+        "ffprobe",
+        "-v", "error",
+        "-show_entries", "stream=codec_type,start_time",
+        "-of", "json",
+        os.fspath(video_path),
+    ]
+    try:
+        result = _run_media_command(
+            command,
+            tool_name="FFprobe",
+            timeout_seconds=FFPROBE_TIMEOUT_SECONDS,
+            capture_stdout=True,
+        )
+        data = json.loads(result.stdout)
+    except (MediaToolError, json.JSONDecodeError, OSError):
+        return 0.0
+
+    video_start = 0.0
+    audio_start = 0.0
+    found_audio = False
+    found_video = False
+    for stream in data.get("streams", []):
+        if not isinstance(stream, dict):
+            continue
+        codec_type = stream.get("codec_type")
+        raw_start = stream.get("start_time")
+        try:
+            start = float(raw_start) if raw_start is not None else 0.0
+        except (TypeError, ValueError):
+            continue
+        if not math.isfinite(start):
+            start = 0.0
+        if codec_type == "video" and not found_video:
+            video_start = max(0.0, start)
+            found_video = True
+        elif codec_type == "audio" and not found_audio:
+            audio_start = max(0.0, start)
+            found_audio = True
+
+    if not found_audio:
+        return 0.0
+    return max(0.0, audio_start - video_start)
+
+
 def _merge_same_pitch(notes: List[Tuple[float, float, int, float]],
                         gap_threshold: float = 0.05,
                         min_duration: float = 0.08) -> List[Tuple[float, float, int, float]]:

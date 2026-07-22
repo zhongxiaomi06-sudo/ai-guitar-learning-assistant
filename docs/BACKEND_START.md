@@ -281,7 +281,7 @@ http://localhost:5173/?course=bcf4b374c965#/home
 
 ## 已知生态问题
 
-1. **双前端过渡**：当前默认入口是 `index.html` → `src/product-app.js`（艺术化单页，已接通后端）。`src/main.js`、`src/home.js`、`src/app.js`、`src/ui-demo.js` 为过渡期旧实现，尚未完全整合，仓库中保留以便后续择优合并。
+1. **前端入口统一**：当前默认入口为 `index.html` → `src/product-app.js`（艺术化单页，已接通后端）。过渡期旧实现已清理，后续功能直接在该单页入口上迭代。
 2. **解析流水线依赖**：Basic Pitch 的 PyPI 元数据强制 TensorFlow，需使用 `--no-deps` 安装，已通过 `requirements-pipeline.txt` + `Dockerfile` 两步安装解决。
 
 ## 运行方式
