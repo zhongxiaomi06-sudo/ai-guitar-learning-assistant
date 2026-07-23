@@ -260,6 +260,29 @@ a:focus-visible {
   background: transparent;
 }
 
+/* ---- Beginner pill ---- */
+
+.beginner-pill {
+  color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 8%, color-mix(in srgb, var(--color-surface) 95%, transparent));
+}
+
+.beginner-pill:hover {
+  color: var(--color-accent);
+  border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 14%, color-mix(in srgb, var(--color-surface) 90%, transparent));
+}
+
+.beginner-pill-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 50%, transparent);
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
 .mic-active .status-dot,
 .live-mic.is-active i,
 .settings-foot.is-active .status-dot {
@@ -4870,7 +4893,7 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
   :root { --header-height: 66px; }
 
   .brand-copy small,
-  .status-pill span:not(.status-dot) {
+  .status-pill span:not(.status-dot):not(.beginner-pill-dot) {
     display: none;
   }
 

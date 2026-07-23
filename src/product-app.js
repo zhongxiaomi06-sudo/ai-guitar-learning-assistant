@@ -75,6 +75,8 @@ const state = {
   focusAttempts: 0,
   focusResults: [],
   focusLoopCount: 0,
+  focusSeekGuard: false,
+  focusCountdownInterval: null,
   defaultTabEvents: [],
   backendAvailable: null,
   backendCourses: [],
@@ -2092,53 +2094,73 @@ function playerFrame(timestamp) {
   // 首个稳定音高仍可完成该目标的一次判定，避免全程无记录而得 0 分。
   if (state.scoringEnabled && state.playing && state.micAllowed && state.matchingEngine && state.currentNote) {
     const detection = state.lastDetection;
-    const hasPitch = detection?.rms >= 0.004
-      && detection?.pitch?.confidence >= 0.45
-      && detection.pitch.frequency > 0;
     const alreadyJudged = state.practiceResults.some(
       (result) => result.passId === state.scoringPass && result.targetId === state.currentNote.id,
     );
 
-    if (hasPitch && (detection.onset || !alreadyJudged)) {
-      const playedNote = {
-        pitch: detection.pitch.frequency,
-        rms: detection.rms,
-        // 模拟器返回的是「用户实际演奏时间」，比采样时刻更准确；
-        // 真实麦克风检测不携带 onsetTime，回退到当前播放时间。
-        // 校准偏移补偿输入延迟：检测到的起音比实际弹奏晚 latencyOffset 秒。
-        // 没有捕获到瞬态时只能确认音高，不能反推真实起音时刻。
-        // 此时以目标起点作为中性时间，避免把“起音未捕获”误判为节奏错误。
-        onsetTime: detection.onset
+    // 和弦目标：用 FFT 模板匹配检测完整性，不依赖 YIN 单音检测
+    const isChordTarget = state.currentNote.type === 'chord'
+      && Array.isArray(state.currentNote.notes) && state.currentNote.notes.length > 0;
+
+    if (isChordTarget && state.micDetector && !alreadyJudged) {
+      const hasSound = detection?.rms >= 0.004;
+      if (hasSound && (detection.onset || !alreadyJudged)) {
+        const noteToMidi = (n) => {
+          if (Number.isFinite(n.midi)) return n.midi;
+          const base = [64, 59, 55, 50, 45, 40];
+          return base[n.string - 1] + n.fret;
+        };
+        const targetMidis = state.currentNote.notes.map(noteToMidi);
+        const chordResult = state.micDetector.detectChord(targetMidis);
+        const presentCount = chordResult.filter((r) => r.present).length;
+        const missingCount = targetMidis.length - presentCount;
+
+        let resultType, score, pitchDeviation;
+        if (missingCount === 0) {
+          resultType = 'correct';
+          score = 'good';
+          pitchDeviation = 0;
+        } else if (missingCount <= targetMidis.length / 2) {
+          resultType = 'wrong-chord';
+          score = 'miss';
+          pitchDeviation = 50;
+        } else {
+          resultType = 'miss';
+          score = 'miss';
+          pitchDeviation = Infinity;
+        }
+
+        const onsetTime = detection.onset
           ? (Number.isFinite(detection.onsetTime) ? detection.onsetTime : state.playerTime) - state.calibrationOffset
-          : state.currentNote.startTime,
-      };
-      const result = state.matchingEngine.match(state.playerTime, playedNote);
-      state.lastResult = result;
+          : state.currentNote.startTime;
+        const timingOffsetMs = (onsetTime - state.currentNote.startTime) * 1000;
 
-      // 避免同一音符被重复记录多次
-      const isSameNote = state.practiceResults.some(
-        (record) => record.targetId === state.currentNote.id && record.passId === state.scoringPass,
-      );
+        state.lastResult = {
+          type: resultType,
+          score,
+          pitchDeviation,
+          timingDeviation: timingOffsetMs,
+          targetNote: state.currentNote,
+          playedNote: { pitch: detection.pitch.frequency, rms: detection.rms, onsetTime },
+        };
 
-      if (!isSameNote) {
         const record = {
           targetId: state.currentNote.id,
-          targetType: state.currentNote.type || 'note',
+          targetType: 'chord',
           targetChord: state.currentNote.chord || null,
           measureIndex: state.currentNote.measureIndex || null,
           detectedPitch: freqToMidi(detection.pitch.frequency),
           detectedFreq: detection.pitch.frequency,
-          timingOffsetMs: result.timingDeviation,
-          pitchDeviation: result.pitchDeviation,
-          resultType: result.type,
-          score: result.score,
+          timingOffsetMs,
+          pitchDeviation,
+          resultType,
+          score,
           videoTime: state.playerTime,
           targetTime: state.currentNote.startTime,
           passId: state.scoringPass,
         };
         appendPracticeRecord(record);
 
-        // 自动进入专项纠错：连续 3 次同音符错误
         if (!state.focusMode && state.autoSlowDown !== false) {
           const recent = state.practiceResults.slice(-3);
           const sameTarget = recent.every((r) => r.targetId === state.currentNote.id);
@@ -2148,22 +2170,76 @@ function playerFrame(timestamp) {
           }
         }
       }
+    } else if (!isChordTarget) {
+      const hasPitch = detection?.rms >= 0.004
+        && detection?.pitch?.confidence >= 0.45
+        && detection.pitch.frequency > 0;
+
+      if (hasPitch && (detection.onset || !alreadyJudged)) {
+        const playedNote = {
+          pitch: detection.pitch.frequency,
+          rms: detection.rms,
+          onsetTime: detection.onset
+            ? (Number.isFinite(detection.onsetTime) ? detection.onsetTime : state.playerTime) - state.calibrationOffset
+            : state.currentNote.startTime,
+        };
+        const result = state.matchingEngine.match(state.playerTime, playedNote);
+        state.lastResult = result;
+
+        const isSameNote = state.practiceResults.some(
+          (record) => record.targetId === state.currentNote.id && record.passId === state.scoringPass,
+        );
+
+        if (!isSameNote) {
+          const record = {
+            targetId: state.currentNote.id,
+            targetType: state.currentNote.type || 'note',
+            targetChord: state.currentNote.chord || null,
+            measureIndex: state.currentNote.measureIndex || null,
+            detectedPitch: freqToMidi(detection.pitch.frequency),
+            detectedFreq: detection.pitch.frequency,
+            timingOffsetMs: result.timingDeviation,
+            pitchDeviation: result.pitchDeviation,
+            resultType: result.type,
+            score: result.score,
+            videoTime: state.playerTime,
+            targetTime: state.currentNote.startTime,
+            passId: state.scoringPass,
+          };
+          appendPracticeRecord(record);
+
+          if (!state.focusMode && state.autoSlowDown !== false) {
+            const recent = state.practiceResults.slice(-3);
+            const sameTarget = recent.every((r) => r.targetId === state.currentNote.id);
+            const allErrors = recent.every((r) => r.resultType !== 'correct');
+            if (recent.length >= 3 && sameTarget && allErrors) {
+              enterFocusMode(state.currentNote, recent[recent.length - 1].resultType);
+            }
+          }
+        }
+      }
     }
   }
 
   // 纠错模式：在循环范围内自动回跳
-  if (state.focusMode && state.loopEnabled && state.playerTime >= state.focusLoopEnd) {
-    state.focusLoopCount += 1;
-    if (state.focusLoopCount >= 2) {
-      if (state.scoringEnabled) {
-        pausePlayer();
-        evaluateFocusAttempt();
+  if (state.focusMode && state.loopEnabled) {
+    if (state.playerTime >= state.focusLoopEnd && !state.focusSeekGuard) {
+      state.focusLoopCount += 1;
+      if (state.focusLoopCount >= 2) {
+        if (state.scoringEnabled) {
+          pausePlayer();
+          evaluateFocusAttempt();
+        } else {
+          state.focusSeekGuard = true;
+          seekPlayer(state.focusLoopStart);
+        }
+        state.focusLoopCount = 0;
       } else {
+        state.focusSeekGuard = true;
         seekPlayer(state.focusLoopStart);
       }
-      state.focusLoopCount = 0;
-    } else {
-      seekPlayer(state.focusLoopStart);
+    } else if (state.focusSeekGuard && state.playerTime < state.focusLoopEnd) {
+      state.focusSeekGuard = false;
     }
   }
 
@@ -2918,7 +2994,16 @@ function startFocusAttempt() {
   let count = 3;
   number.textContent = String(count);
   const measureIndex = state.focusEvent?.measureIndex || 6;
-  const interval = window.setInterval(() => {
+  if (state.focusCountdownInterval) {
+    window.clearInterval(state.focusCountdownInterval);
+  }
+  state.focusCountdownInterval = window.setInterval(() => {
+    const currentFsm = state.focusFsm;
+    if (!currentFsm) {
+      window.clearInterval(state.focusCountdownInterval);
+      state.focusCountdownInterval = null;
+      return;
+    }
     count -= 1;
     if (count > 0) {
       number.textContent = String(count);
@@ -2929,15 +3014,17 @@ function startFocusAttempt() {
       $('small', countdown).textContent = `弹奏第 ${measureIndex} 小节`;
       return;
     }
-    window.clearInterval(interval);
+    window.clearInterval(state.focusCountdownInterval);
+    state.focusCountdownInterval = null;
     countdown.hidden = true;
     $('small', countdown).textContent = '准备演奏';
-    fsm.finishCountIn();
+    currentFsm.finishCountIn();
     // 每轮只统计本轮结果，便于评估与对比
     state.focusResults = [];
     state.focusLoopCount = 0;
+    state.focusSeekGuard = true;
     state.loopEnabled = true;
-    state.playerSpeed = fsm.currentSpeed;
+    state.playerSpeed = currentFsm.currentSpeed;
     const video = $('#playerVideo');
     if (video) video.playbackRate = state.playerSpeed;
     state.playerTime = state.focusLoopStart;
@@ -3001,11 +3088,16 @@ function evaluateFocusAttempt() {
 }
 
 function exitFocusMode() {
+  if (state.focusCountdownInterval) {
+    window.clearInterval(state.focusCountdownInterval);
+    state.focusCountdownInterval = null;
+  }
   state.focusFsm?.exit();
   state.focusMode = false;
   state.focusEvent = null;
   state.focusErrorType = 'default';
   state.focusFsm = null;
+  state.focusSeekGuard = false;
   state.loopEnabled = false;
   state.playerSpeed = 1;
   const video = $('#playerVideo');
@@ -3042,7 +3134,7 @@ function renderBeginnerTutorial() {
   if (finish) finish.hidden = !progress.isLast;
 
   $$('[data-beginner-entry-status]').forEach((label) => {
-    label.textContent = state.beginnerComplete ? '基础已完成 · 随时复习' : '3 分钟 · 只学马上要用的';
+    label.textContent = state.beginnerComplete ? '新手复习' : '新手上手';
   });
 }
 
