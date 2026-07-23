@@ -2176,9 +2176,17 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
 .seek-track {
   position: relative;
   flex: 1;
-  height: 4px;
+  height: 6px;
+  border-radius: 999px;
   cursor: pointer;
-  background: var(--color-line);
+  background: color-mix(in srgb, var(--color-line) 78%, var(--color-surface));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .1);
+}
+
+.seek-track::before {
+  content: "";
+  position: absolute;
+  inset: -9px 0;
 }
 
 .seek-track > i {
@@ -2186,7 +2194,9 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
   display: block;
   width: 0;
   height: 100%;
+  border-radius: inherit;
   background: var(--color-accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-accent) 24%, transparent);
 }
 
 .seek-track > i::after {
@@ -2194,13 +2204,17 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
   position: absolute;
   top: 50%;
   right: 0;
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--color-surface);
+  width: 12px;
+  height: 12px;
+  border: 3px solid var(--color-surface);
   border-radius: 50%;
   background: var(--color-accent);
-  transform: translate(-50%, -50%);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, .28);
+  transform: translate(50%, -50%);
 }
+
+.seek-track:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 5px; }
+.seek-track:hover > i::after { width: 14px; height: 14px; }
 
 .seek-track > b {
   position: absolute;
@@ -2477,8 +2491,9 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
   padding: 28px 14px 10px;
   color: #f7eddd;
   background:
-    radial-gradient(circle at 20% 15%, rgba(203, 128, 75, .2), transparent 34%),
-    linear-gradient(145deg, #2e352f, #171c19);
+    radial-gradient(circle at 18% 12%, rgba(255, 205, 130, .16), transparent 30%),
+    radial-gradient(circle at 84% 76%, rgba(116, 181, 146, .12), transparent 34%),
+    linear-gradient(145deg, #303b34, #171d1a);
 }
 
 .hand-action-guide > p {
@@ -2503,12 +2518,13 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
   position: relative;
   min-height: 72px;
   margin: 2px 4px;
-  border: 1px solid rgba(255, 255, 255, .28);
-  border-radius: 5px;
+  border: 1px solid rgba(255, 245, 225, .34);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .22), inset 0 1px rgba(255, 255, 255, .12);
   background:
     repeating-linear-gradient(to bottom, transparent 0 calc(16.666% - 1px), rgba(247, 237, 221, .55) calc(16.666% - 1px) 16.666%),
     repeating-linear-gradient(to right, transparent 0 calc(20% - 1px), rgba(247, 237, 221, .32) calc(20% - 1px) 20%),
-    linear-gradient(90deg, #5c412c, #33291f);
+    linear-gradient(90deg, #76533a, #3b2d23);
 }
 
 .fret-nut {
@@ -2539,16 +2555,19 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
 .sim-left-finger path,
 .sim-left-finger circle,
 .simulated-right-hand span {
-  fill: #d69a72;
-  stroke: #7e4b38;
-  stroke-width: 1.4;
-  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .34));
+  fill: #f3b783;
+  stroke: #7d4b36;
+  stroke-width: 1.8;
+  filter: drop-shadow(0 4px 5px rgba(0, 0, 0, .28));
 }
+
+.simulated-left-hand .sim-palm { fill: #efaa78; opacity: .9; }
+.simulated-left-hand .sim-wrist { fill: #77aa87; stroke: #315f48; }
 
 .sim-left-finger path {
   fill: none;
-  stroke: #d69a72;
-  stroke-width: 8;
+  stroke: #f3b783;
+  stroke-width: 7;
   stroke-linecap: round;
   transition: d 260ms cubic-bezier(.2, .8, .2, 1);
 }
@@ -2569,13 +2588,14 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
   position: absolute;
   display: grid;
   place-items: center;
-  width: 20px;
-  height: 20px;
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, .9);
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  color: #fffaf1;
+  border: 2px dashed rgba(255, 248, 230, .9);
   border-radius: 50%;
-  background: var(--color-accent);
-  box-shadow: 0 0 0 4px rgba(164, 71, 46, .22);
+  background: color-mix(in srgb, var(--color-accent) 82%, #efb35e);
+  box-shadow: 0 0 0 5px rgba(239, 179, 94, .14), 0 3px 8px rgba(0, 0, 0, .24);
   font-family: var(--font-mono);
   font-size: 8px;
   transform: translate(-50%, -50%);
@@ -2587,8 +2607,11 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
   align-content: space-around;
   min-height: 74px;
   padding: 5px 12px;
-  border-radius: 50% / 20%;
-  background: radial-gradient(ellipse, #1a1714 0 36%, #8a623e 37% 41%, #4e3929 42% 100%);
+  overflow: hidden;
+  border: 1px solid rgba(255, 241, 214, .22);
+  border-radius: 16px;
+  background: radial-gradient(circle at 30% 50%, #171411 0 26%, #9a6a40 27% 31%, transparent 32%), linear-gradient(135deg, #69472f, #39281e);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .22), inset 0 1px rgba(255, 255, 255, .1);
 }
 
 .string-guide i {
@@ -2633,19 +2656,19 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
 .sim-right-finger {
   position: absolute;
   display: block;
-  border: 1px solid #7e4b38;
-  background: linear-gradient(135deg, #edbc94, #bd7657);
+  border: 2px solid #70442f;
+  background: linear-gradient(135deg, #ffd09c, #df8f62);
   box-shadow: 0 4px 9px rgba(0, 0, 0, .34);
 }
 
-.sim-right-wrist { right: -4px; bottom: 13px; width: 32px; height: 28px; border-radius: 9px; transform: rotate(-12deg); }
+.sim-right-wrist { right: -4px; bottom: 13px; width: 32px; height: 28px; border-color: #315f48; border-radius: 9px; background: #77aa87; transform: rotate(-12deg); }
 .sim-right-palm { right: 17px; bottom: 14px; width: 35px; height: 39px; border-radius: 48% 45% 42% 50%; transform: rotate(-18deg); }
 .sim-right-finger { width: 10px; height: 34px; border-radius: 999px; transform-origin: 50% 90%; transition: transform 180ms ease, background 180ms ease; }
 .sim-thumb { left: 22px; top: 29px; height: 30px; transform: rotate(58deg); }
 .sim-index { left: 15px; top: 4px; transform: rotate(-21deg); }
 .sim-middle { left: 28px; top: 0; height: 38px; transform: rotate(-8deg); }
 .sim-ring { left: 41px; top: 5px; height: 34px; transform: rotate(7deg); }
-.sim-right-finger.is-active { background: #f0c09b; box-shadow: 0 0 0 3px rgba(215, 156, 88, .4), 0 4px 9px rgba(0, 0, 0, .34); }
+.sim-right-finger.is-active { background: #ffe0a9; box-shadow: 0 0 0 4px rgba(255, 199, 95, .3), 0 4px 9px rgba(0, 0, 0, .34); }
 
 .player-view.is-playing .simulated-right-hand .sim-right-finger.is-active {
   animation: simulated-pick-down 420ms ease-in-out infinite;
