@@ -23,6 +23,7 @@ import { VoiceController } from './core/voice/controller.js';
 import { VOICE_HELP_TEXT } from './core/voice/commands.js';
 import { midiToNoteName, freqToMidi } from './shared/utils/index.js';
 import { ApiError, courses, practice } from './shared/utils/api.js';
+import { detectDeviceProfile } from './shared/utils/device.js';
 
 const ROUTES = new Set(['home', 'analysis', 'overview', 'player', 'focus', 'results', 'library']);
 const MAX_FILE_SIZE = 1024 * 1024 * 1024;
@@ -133,6 +134,50 @@ const state = {
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+
+let deviceProfile = null;
+
+function syncDeviceProfile() {
+  deviceProfile = detectDeviceProfile({
+    userAgent: navigator.userAgent,
+    maxTouchPoints: navigator.maxTouchPoints || 0,
+    coarsePointer: window.matchMedia('(pointer: coarse)').matches,
+    viewportWidth: window.innerWidth,
+  });
+  const previewDevice = new URLSearchParams(window.location.search).get('device');
+  if (['mobile', 'tablet', 'desktop'].includes(previewDevice)) {
+    deviceProfile = {
+      ...deviceProfile,
+      type: previewDevice,
+      isMobile: previewDevice === 'mobile',
+      isTablet: previewDevice === 'tablet',
+      prefersLandscape: previewDevice === 'mobile',
+    };
+  }
+  const orientation = window.innerWidth >= window.innerHeight ? 'landscape' : 'portrait';
+  document.documentElement.dataset.device = deviceProfile.type;
+  document.documentElement.dataset.orientation = orientation;
+  document.body.classList.toggle('is-mobile-device', deviceProfile.isMobile);
+  document.body.classList.toggle('is-tablet-device', deviceProfile.isTablet);
+  document.body.classList.toggle('is-touch-device', deviceProfile.isTouch);
+  document.body.classList.toggle('is-landscape', orientation === 'landscape');
+  document.body.classList.toggle('is-portrait', orientation === 'portrait');
+}
+
+async function requestLandscapeMode() {
+  if (!deviceProfile?.prefersLandscape) return;
+  try {
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    }
+    await screen.orientation?.lock?.('landscape');
+  } catch {
+    showToast('请旋转手机进入横屏；当前浏览器不允许网页自动切换方向。');
+  } finally {
+    syncDeviceProfile();
+    applyLayoutPreferences();
+  }
+}
 
 function loadPreferences() {
   try {
@@ -3315,6 +3360,9 @@ function handleAction(action, element, payload = {}) {
       }
       break;
     }
+    case 'request-landscape':
+      void requestLandscapeMode();
+      break;
     case 'frame-back':
       frameStep(-1);
       break;
@@ -3517,6 +3565,11 @@ function initEvents() {
     voiceController?.stop?.();
   });
   window.addEventListener('resize', () => {
+    syncDeviceProfile();
+    applyLayoutPreferences();
+  });
+  screen.orientation?.addEventListener?.('change', () => {
+    syncDeviceProfile();
     applyLayoutPreferences();
   });
 
@@ -3541,6 +3594,7 @@ function initEvents() {
 }
 
 function bootstrap() {
+  syncDeviceProfile();
   loadPreferences();
   renderBeginnerTutorial();
   applyLayoutPreferences();

@@ -5510,6 +5510,330 @@ body:has(.timeline-resize-handle.is-dragging) { user-select: none; }
   }
 }
 
+/* UA-classified phones: landscape-first practice workspace */
+.landscape-prompt {
+  display: none;
+}
+
+html[data-device="mobile"] {
+  --mobile-touch-size: 42px;
+}
+
+html[data-device="mobile"] button,
+html[data-device="tablet"] button {
+  touch-action: manipulation;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .main-nav {
+  position: static;
+  display: flex;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] body:not(.is-player-view) {
+  padding-bottom: 0;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .nav-link {
+  min-height: var(--mobile-touch-size);
+  padding-inline: 12px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .topbar {
+  min-height: 54px;
+  padding: env(safe-area-inset-top, 0px) max(14px, env(safe-area-inset-right, 0px)) 0 max(14px, env(safe-area-inset-left, 0px));
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .brand-copy small,
+html[data-device="mobile"][data-orientation="landscape"] .topbar-actions .status-pill span:last-child {
+  display: none;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .status-pill,
+html[data-device="mobile"][data-orientation="landscape"] .icon-button {
+  width: var(--mobile-touch-size);
+  min-width: var(--mobile-touch-size);
+  height: var(--mobile-touch-size);
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .page-frame {
+  width: min(100% - 28px, 1180px);
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .home-hero {
+  grid-template-columns: .72fr 1.28fr;
+  gap: 24px;
+  min-height: calc(100dvh - 54px);
+  padding-block: 18px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .hero-body h1 {
+  font-size: clamp(64px, 15vw, 110px);
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .upload-composition {
+  padding-block: 8px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .upload-panel,
+html[data-device="mobile"][data-orientation="landscape"] .upload-dropzone {
+  min-height: min(72dvh, 330px);
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .upload-dropzone {
+  padding: 22px 18px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .string-emblem {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 10px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .upload-dropzone h2 {
+  font-size: 22px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .format-line {
+  margin-top: 16px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .workspace-shell {
+  grid-template-rows: auto minmax(0, 1fr) 4px auto auto;
+  gap: 4px;
+  padding: max(5px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) max(5px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .workspace-toolbar {
+  display: flex;
+  min-height: 38px;
+  gap: 8px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .workspace-title {
+  min-width: 0;
+  gap: 7px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .workspace-title > button {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .workspace-title small,
+html[data-device="mobile"][data-orientation="landscape"] .workspace-stats > span:first-child,
+html[data-device="mobile"][data-orientation="landscape"] .workspace-stats > .workspace-action,
+html[data-device="mobile"][data-orientation="landscape"] .workspace-stats > .compact-button {
+  display: none;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .workspace-title h1 {
+  overflow: hidden;
+  max-width: 25vw;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .speed-control {
+  width: auto;
+  overflow: hidden;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .speed-control button {
+  min-width: 42px;
+  min-height: 34px;
+  padding-inline: 5px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .player-grid {
+  grid-template-columns: minmax(0, 1.85fr) 4px minmax(210px, 1fr);
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .panel-resize-handle,
+html[data-device="mobile"][data-orientation="landscape"] .timeline-resize-handle {
+  pointer-events: none;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .video-controls {
+  min-height: 44px;
+  gap: 4px;
+  padding-inline: 6px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .video-controls button {
+  min-width: 38px;
+  min-height: 38px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .video-controls button:not(.main-play):nth-child(1),
+html[data-device="mobile"][data-orientation="landscape"] .video-controls button:not(.main-play):nth-child(3),
+html[data-device="mobile"][data-orientation="landscape"] .ab-loop-controls button[data-action="set-loop-a"],
+html[data-device="mobile"][data-orientation="landscape"] .ab-loop-controls button[data-action="set-loop-b"],
+html[data-device="mobile"][data-orientation="landscape"] .ab-loop-controls button[data-action="clear-loop"],
+html[data-device="mobile"][data-orientation="landscape"] [data-player-duration] {
+  display: none;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .hand-stack {
+  grid-template-rows: 28px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .hand-mode-toolbar {
+  min-height: 28px;
+  padding: 2px 3px 2px 8px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .hand-mode-toolbar > span,
+html[data-device="mobile"][data-orientation="landscape"] .hand-header-actions b,
+html[data-device="mobile"][data-orientation="landscape"] .hand-pane footer,
+html[data-device="mobile"][data-orientation="landscape"] .hand-action-guide > p small {
+  display: none;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .hand-mode-toolbar button {
+  min-height: 24px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .hand-pane {
+  grid-template-rows: 28px minmax(0, 1fr);
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .hand-pane header {
+  min-height: 28px;
+  padding-inline: 8px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .hand-video-crop {
+  min-height: 0;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .hand-action-guide {
+  gap: 3px;
+  padding: 19px 7px 5px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .fretboard-guide,
+html[data-device="mobile"][data-orientation="landscape"] .string-guide {
+  min-height: 52px;
+  margin: 0;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .timeline-toolbar {
+  min-height: 26px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .waveform-row,
+html[data-device="mobile"][data-orientation="landscape"] .measure-row {
+  display: none;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .track-label {
+  width: 42px;
+  padding-top: 8px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .chord-row,
+html[data-device="mobile"][data-orientation="landscape"] .tablature-row {
+  grid-template-columns: 42px 1fr;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .tablature {
+  height: 78px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .chord-row > div,
+html[data-device="mobile"][data-orientation="landscape"] .chord-row button {
+  min-height: 30px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .timeline-playhead {
+  left: 42px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .feedback-bar {
+  position: static;
+  min-height: 46px;
+  grid-template-columns: 1fr auto;
+  padding: 6px 10px;
+}
+
+html[data-device="mobile"][data-orientation="landscape"] .feedback-bar > p,
+html[data-device="mobile"][data-orientation="landscape"] .issue-button {
+  display: none;
+}
+
+body.is-mobile-device.is-player-view.is-portrait .landscape-prompt {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 22px;
+  padding: 36px;
+  color: var(--color-ink);
+  background: color-mix(in srgb, var(--color-bg) 96%, transparent);
+  text-align: center;
+  backdrop-filter: blur(18px);
+}
+
+.landscape-prompt > div:not(.landscape-phone) {
+  display: grid;
+  gap: 7px;
+  max-width: 310px;
+}
+
+.landscape-prompt strong {
+  font-family: var(--font-display);
+  font-size: 27px;
+}
+
+.landscape-prompt span {
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.landscape-phone {
+  position: relative;
+  width: 92px;
+  height: 54px;
+  border: 4px solid var(--color-ink);
+  border-radius: 13px;
+  transform: rotate(-8deg);
+  animation: phone-turn 1.8s ease-in-out infinite alternate;
+}
+
+.landscape-phone::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 5px;
+  width: 4px;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--color-accent);
+  transform: translateY(-50%);
+}
+
+.landscape-phone i {
+  position: absolute;
+  inset: 7px 12px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, var(--color-accent-soft), var(--color-sage));
+}
+
+@keyframes phone-turn {
+  to { transform: rotate(4deg) scale(1.04); }
+}
+
 @media (max-height: 850px) and (min-width: 721px) {
   .workspace-shell {
     padding-block: 7px;
